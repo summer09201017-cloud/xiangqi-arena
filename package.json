@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node test/rules.mjs && node test/daily.mjs",
     "serve": "node scripts/serve.mjs",
-    "check": "node scripts/browser-check.mjs"
+    "check": "node scripts/browser-check.mjs",
+    "stage": "node scripts/stage.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.62.1"
