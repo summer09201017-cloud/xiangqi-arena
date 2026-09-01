@@ -1,0 +1,14 @@
+{
+  "name": "xiangqi-arena",
+  "version": "1.0.0",
+  "private": true,
+  "description": "3D 象棋對局場(重建版)—— Three.js xiangqi PWA",
+  "scripts": {
+    "test": "node test/rules.mjs && node test/daily.mjs",
+    "serve": "node scripts/serve.mjs",
+    "check": "node scripts/browser-check.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
+  }
+}

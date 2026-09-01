@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#9a3f2a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="3D象棋" />
+  <title>3D 象棋對局場</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <p class="eyebrow">Three.js Xiangqi PWA</p>
+      <h1>3D 象棋對局場</h1>
+      <p class="subtitle">點選棋子與交叉點即可走子;3D 視角可用滑鼠拖曳旋轉、雙指縮放。</p>
+      <!-- 🏷 版本簡歷(game-must-haves ⑦):寫清楚這一版做了什麼 + 前幾版一行 -->
+      <p id="verTag" class="ver-tag">
+        v1 · 重建版(從此有源碼)· 📅 每日殘局一組 5 題 · 💡 AI 提示 · 五種開局譜 · 存讀檔 · 2D/3D
+      </p>
+    </header>
+
+    <main class="board-layout">
+      <section class="stage-panel">
+        <div class="status-row">
+          <div class="status-pill"><span class="dot"></span><span id="statusText">點選任一紅棋開始。</span></div>
+          <div id="turnChip" class="turn-chip">紅方行棋</div>
+        </div>
+        <p id="tipText" class="tip">先點你的棋子,再點要移動到的位置。</p>
+        <!-- 📅 每日殘局的常駐狀態行(只有每日模式看得到) -->
+        <p id="dailyLine" class="daily-line hidden"></p>
+        <div class="canvas-shell"><div id="game-container"></div></div>
+      </section>
+
+      <aside class="info-panel">
+        <section class="info-card">
+          <h2>對局控制</h2>
+          <label class="field">
+            <span>玩家執方</span>
+            <select id="sideSelect">
+              <option value="red">紅方先手(你先走)</option>
+              <option value="black">AI 先手(你執黑)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>視角模式</span>
+            <select id="viewSelect">
+              <option value="3d">3D 視角</option>
+              <option value="2d">2D 視角</option>
+            </select>
+          </label>
+          <div class="button-row">
+            <button id="newGameButton" class="primary" type="button">重新開局</button>
+            <button id="hintButton" type="button" title="讓 AI 幫你想一手">💡 提示</button>
+            <button id="undoButton" type="button">後悔一步</button>
+            <button id="cameraButton" type="button">重置視角</button>
+            <button id="saveButton" type="button">存檔</button>
+            <button id="loadButton" type="button">讀檔</button>
+            <button id="rotateLeftButton" type="button">2D 左轉</button>
+            <button id="rotateRightButton" type="button">2D 右轉</button>
+            <button id="installButton" class="hidden" type="button">安裝到手機</button>
+          </div>
+        </section>
+
+        <section class="info-card">
+          <h2>AI 強度</h2>
+          <label class="field">
+            <span>對手等級</span>
+            <select id="difficultySelect">
+              <option value="easy">Lv.1 初級(隨機/淺層)</option>
+              <option value="medium" selected>Lv.2 中級</option>
+              <option value="hard">Lv.3 高級</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>開局棋譜</span>
+            <select id="openingSelect"></select>
+          </label>
+          <p id="openingHint" class="hint-line"></p>
+        </section>
+
+        <section class="info-card">
+          <h2>📅 每日殘局</h2>
+          <p class="hint-line">每天一組 5 題,全世界同一組。解完一題接下一題,每題分開記最少步數。</p>
+          <div class="button-row">
+            <button id="dailyButton" class="primary" type="button">📅 開始今天的殘局</button>
+          </div>
+        </section>
+
+        <section class="info-card">
+          <h2>安裝方式</h2>
+          <p id="installHint" class="hint-line">Android 與桌機瀏覽器會顯示安裝按鈕;iPhone 可用 Safari 分享選單的「加入主畫面」。</p>
+        </section>
+
+        <section class="info-card">
+          <h2>對局摘要</h2>
+          <p id="summaryText" class="hint-line"></p>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <!-- 結算 -->
+  <div id="gameOverOverlay" class="overlay hidden">
+    <div class="overlay-card">
+      <h2 id="winnerText"></h2>
+      <div class="button-row">
+        <button id="dailyNextButton" class="primary hidden" type="button">📅 下一題</button>
+        <button id="dailyRetryButton" class="hidden" type="button">🔁 這題再來一次</button>
+        <button id="retryButton" class="primary" type="button">再來一局</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="js/pieces.js"></script>
+  <script src="js/gameLogic.js"></script>
+  <script src="js/openings.js"></script>
+  <script src="js/puzzles.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

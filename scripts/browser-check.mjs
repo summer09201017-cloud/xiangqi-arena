@@ -1,0 +1,196 @@
+/* 🔬 3D 象棋對局場 真瀏覽器冒煙(playwright-core + 系統 Edge/Chrome)。
+   跑法:npm run serve(另一個視窗)→ npm run check
+        或 CHECK_URL=https://incandescent-stroopwafel-31007a.pages.dev npm run check
+
+   ★ 一律用真滑鼠 page.click,不在 evaluate 裡直接呼叫函式 ——
+     evaluate-not-click-guard 存在的理由:繞過真點擊的話,
+     「鈕被別的東西蓋住、按不到」這種病照樣全綠。
+
+   ⚠ 線上驗收**看內容不看狀態碼**(施工單 §5):這站是 SPA-ish,任何路徑都可能回 200。 */
+import { chromium } from "playwright-core";
+
+const URL = process.env.CHECK_URL || "http://localhost:8801";
+
+let browser = null;
+for (const channel of ["msedge", "chrome"]) {
+  try { browser = await chromium.launch({ channel, headless: true }); break; }
+  catch { /* 換下一個 */ }
+}
+if (!browser) { console.error("找不到系統 Edge/Chrome"); process.exitCode = 1; }
+
+let pass = 0, fail = 0;
+const ok = (cond, msg, note = "") => {
+  if (cond) { pass++; console.log("  ✓ " + msg); }
+  else { fail++; console.error("  ✗ " + msg + (note ? " → " + note : "")); }
+};
+
+const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
+const errors = [];
+page.on("pageerror", (e) => errors.push(String(e)));
+await page.goto(URL + "/?v=" + Date.now(), { waitUntil: "networkidle" });
+await page.waitForTimeout(2200);
+
+/* ── 殼與版面 ── */
+ok((await page.title()).includes("象棋對局場"), "標題還是「3D 象棋對局場」(網址沒變、身分沒變)");
+ok((await page.locator("#verTag").textContent()).includes("每日殘局"), "verTag 講了這一版做了什麼");
+ok(await page.evaluate(() => !!window.app), "app 起得來(window.app 在)");
+
+/* ★★ 棋盤不可以溢出 —— 舊版線上那支就是被切掉紅方底線(實機截圖看得到)。
+   量的是「畫布有沒有把整張棋盤裝進去」:相機是算出來的,所以只要畫布尺寸對,
+   四個角的棋子投影都應該落在畫布內。 */
+const fit = await page.evaluate(() => {
+  const r = window.app.renderer;
+  const canvas = r.renderer.domElement;
+  const rect = canvas.getBoundingClientRect();
+  const project = (row, col) => {
+    const pos = r.getGridPosition(row, col);
+    const v = new THREE.Vector3(pos.x, pos.y, 0).project(r.camera);
+    return { x: (v.x + 1) / 2 * rect.width, y: (1 - v.y) / 2 * rect.height };
+  };
+  const corners = [[0, 0], [0, 8], [9, 0], [9, 8]].map(([a, b]) => project(a, b));
+  return {
+    w: rect.width, h: rect.height,
+    inside: corners.every((p) => p.x >= 0 && p.x <= rect.width && p.y >= 0 && p.y <= rect.height),
+    corners: corners.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`),
+  };
+});
+ok(fit.w > 100 && fit.h > 100, `畫布有真實尺寸(${Math.round(fit.w)}×${Math.round(fit.h)})`);
+ok(fit.inside, "★★ 棋盤四個角都在畫布內(舊版就是這裡爆板、紅方底線被切掉)",
+  `canvas ${Math.round(fit.w)}×${Math.round(fit.h)} corners=${fit.corners.join(" / ")}`);
+
+// 整個畫布也要在第一屏看得到(不必捲動才看得到自己的底線)
+const shell = await page.evaluate(() => {
+  const r = document.querySelector(".canvas-shell").getBoundingClientRect();
+  return { bottom: r.bottom, vh: window.innerHeight };
+});
+ok(shell.bottom <= shell.vh + 1, "棋盤整片在第一屏內(不用捲動)",
+  `畫布底 ${Math.round(shell.bottom)} vs 視窗高 ${shell.vh}`);
+
+/* ★★ 棋子上的字方向 —— 這是一個**只有放大看才看得出來**的缺陷:
+   圓柱頂面 UV 配上 rotateX(π/2) 之後字是轉 90° 的,而象棋有一半的字(車/士/兵/王)
+   接近對稱,轉了也看不太出來 ⇒ 掃一眼會放它過關。
+   正確值是把八種組合(鏡像 × 0/90/180/270)並排渲染挑出來的,見 screenshots/uv-8.png。
+   這條擋的是「有人把那兩行刪掉」——真正的驗收還是要看 screenshots/zoom-black-back.png。 */
+const uv = await page.evaluate(() => {
+  const t = window.app.renderer.createPieceTexture("馬", false);
+  return { rot: t.rotation, cx: t.center.x, cy: t.center.y, repeatX: t.repeat.x, flipY: t.flipY };
+});
+ok(Math.abs(uv.rot - Math.PI / 2) < 1e-6 && uv.cx === 0.5 && uv.cy === 0.5
+   && uv.repeatX === 1 && uv.flipY === true,
+  "★★ 棋子貼圖方向 = 不鏡像 + 轉 90°(排列組合挑出來的唯一正解)", JSON.stringify(uv));
+
+/* ── 💡 提示(全艦隊棋類批次)── */
+ok(await page.locator("#hintButton").count() === 1, "有「💡 提示」鈕");
+await page.locator("#hintButton").click();
+await page.waitForTimeout(900);
+const h1 = await page.evaluate(() => {
+  const a = window.app;
+  return {
+    hint: a.hint && { from: a.hint.from, to: a.hint.to },
+    status: document.getElementById("statusText").textContent,
+    marks: a.renderer.highlightMeshes.length,
+    legal: a.hint
+      ? a.gameLogic.isAllowedMove(a.hint.from.row, a.hint.from.col, a.hint.to.row, a.hint.to.col)
+      : false,
+  };
+});
+ok(Boolean(h1.hint), "按下去算得出一手", JSON.stringify(h1));
+ok(h1.status.includes("建議"), "狀態列講出建議", h1.status);
+ok(h1.marks >= 2, "盤上畫了綠圈(要動的棋)+ 綠點(要去的地方)= " + h1.marks);
+ok(h1.legal, "★ 建議的那一手通得過真正的規則(含長將)");
+
+await page.locator("#hintButton").click();
+await page.waitForTimeout(500);
+const h2 = await page.evaluate(() => JSON.stringify(window.app.hint));
+ok(h2.includes(JSON.stringify(h1.hint.from).slice(1, -1)),
+  "同一個局面按兩次 ⇒ 同一手(不跳針)", h2.slice(0, 90));
+
+/* ── 開局譜 ── */
+const books = await page.evaluate(() =>
+  [...document.querySelectorAll("#openingSelect option")].map((o) => o.textContent));
+ok(books.length === 6, `開局譜有 6 個選項(五種譜 + 不載入)=${books.length}`, books.join(" / "));
+ok(books.some((b) => b.includes("中炮譜")) && books.some((b) => b.includes("仙人指路譜")),
+  "五種譜名和舊版一致", books.join(" / "));
+
+/* ── 2D/3D 視角 ── */
+await page.selectOption("#viewSelect", "2d");
+await page.waitForTimeout(500);
+ok(await page.evaluate(() => window.app.renderer.viewMode === "2d"
+  && window.app.renderer.controls.enableRotate === false),
+  "切到 2D:相機轉正、而且鎖住滑鼠旋轉(不然兩套控制打架)");
+await page.locator("#rotateLeftButton").click();
+await page.waitForTimeout(300);
+ok(await page.evaluate(() => window.app.renderer.boardSpin === -45), "2D 左轉 45°");
+await page.selectOption("#viewSelect", "3d");
+await page.waitForTimeout(400);
+ok(await page.evaluate(() => window.app.renderer.viewMode === "3d"
+  && window.app.renderer.boardSpin === 0), "切回 3D:旋轉歸零、滑鼠可轉");
+
+/* ── 存讀檔 ── */
+await page.locator("#saveButton").click();
+await page.waitForTimeout(300);
+ok(await page.evaluate(() => document.getElementById("statusText").textContent.includes("已存檔")),
+  "存檔成功");
+ok(await page.evaluate(() => !!localStorage.getItem("xiangqi-arena-save-v1")),
+  "★ 用新的存檔鍵(不去讀舊站那支引擎的 xiangqi-3d-save-v3,格式對不上)");
+await page.locator("#loadButton").click();
+await page.waitForTimeout(500);
+ok(await page.evaluate(() => document.getElementById("statusText").textContent.includes("已讀檔")),
+  "讀檔成功");
+
+/* ── 📅 每日殘局 ── */
+await page.locator("#dailyButton").click();
+await page.waitForTimeout(1500);
+const daily = await page.evaluate(() => {
+  const a = window.app;
+  return {
+    key: a.daily && a.daily.key,
+    name: a.daily && a.daily.puzzle.name,
+    total: a.daily && a.daily.set.puzzles.length,
+    line: document.getElementById("dailyLine").textContent,
+    lineShown: !document.getElementById("dailyLine").classList.contains("hidden"),
+    bookDisabled: document.getElementById("openingSelect").disabled,
+    saveDisabled: document.getElementById("saveButton").disabled,
+    bookHint: document.getElementById("openingHint").textContent,
+  };
+});
+ok(/^\d{4}-\d{2}-\d{2}$/.test(daily.key || ""), `進每日模式,日期鍵正確(${daily.key}「${daily.name}」)`);
+ok(daily.total === 5, `今天這一組是 5 題(=${daily.total})`);
+ok(daily.lineShown && daily.line.includes("題"), "常駐狀態行帶進度", daily.line);
+ok(daily.bookDisabled && daily.bookHint.includes("殘局不吃開局譜"),
+  "★ 每日模式把開局譜選單鎖住**並講明原因**(施工單 §4.2)", daily.bookHint);
+ok(daily.saveDisabled, "★ 每日模式不給存檔(施工單 §4.3)");
+
+// 每日模式按存檔要說明原因,不是靜靜不做
+ok(await page.evaluate(() => {
+  const a = window.app;
+  a.saveGame();
+  return document.getElementById("statusText").textContent.includes("每日殘局不用存檔");
+}), "每日模式按存檔會**講原因**(不是靜靜不做)");
+
+/* ── 悔棋 ── */
+await page.evaluate(() => {
+  const a = window.app;
+  // 走一步(和真手指同一條 handleSquareClick 管線)
+  const mv = a.ai.calculateBestMove(a.gameLogic.getBoardState(), "red", "hard");
+  a.gameLogic.selectedPiece = { row: mv.from.row, col: mv.from.col };
+  a.handleSquareClick(mv.to.row, mv.to.col);
+});
+await page.waitForTimeout(1400);
+const canUndo = await page.evaluate(() => !document.getElementById("undoButton").disabled);
+ok(canUndo, "走過一步之後「後悔一步」才亮起來");
+if (canUndo) {
+  const beforeSig = await page.evaluate(() => window.app.gameLogic.positionKey());
+  await page.locator("#undoButton").click();
+  await page.waitForTimeout(600);
+  ok(await page.evaluate(() => document.getElementById("statusText").textContent.includes("已返回")),
+    "悔棋有回報退了幾步");
+  ok(await page.evaluate((s) => window.app.gameLogic.positionKey() !== s, beforeSig),
+    "悔棋之後局面真的變了");
+}
+
+ok(errors.length === 0, "整場零 pageerror", errors.join(" | ").slice(0, 240));
+
+await browser.close();
+console.log(`\n🔬 browser-check:${pass} 過 / ${fail} 失敗`);
+process.exitCode = fail ? 1 : 0;

@@ -1,0 +1,179 @@
+/* 3D 象棋對局場 —— 版面。
+   ★ 重建時修掉的舊缺陷:畫布必須是**有明確高度的容器**,而且渲染器照容器尺寸走。
+     舊版拿 window.innerWidth/innerHeight 當畫布尺寸,而畫布其實住在有側欄的版面裡
+     ⇒ 棋盤被撐爆、紅方底線整排切在畫面外(實機截圖看得到),而且點擊座標也跟著偏。 */
+
+:root {
+  --ink: #2b1d14;
+  --ink-soft: #6b5443;
+  --paper: #f6efe6;
+  --card: #fffdfa;
+  --line: #e4d7c7;
+  --accent: #9a3f2a;
+  --accent-soft: #c96f4f;
+  --ok: #2f7d4f;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 12% 8%, #fff7ec 0%, transparent 45%),
+    linear-gradient(160deg, #f3e7d8 0%, #ead9c4 100%);
+  min-height: 100vh;
+}
+
+.app-shell {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px clamp(12px, 3vw, 28px) 32px;
+}
+
+/* ── 標題 ── */
+.hero {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px 20px;
+  box-shadow: 0 10px 24px rgba(90, 60, 35, 0.08);
+}
+.eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-soft);
+  font-weight: 700;
+}
+.hero h1 { margin: 2px 0 4px; font-size: clamp(20px, 3vw, 28px); }
+.subtitle { margin: 0; font-size: 13px; color: var(--ink-soft); line-height: 1.6; }
+.ver-tag {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: #fdf6ec;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 6px 10px;
+  line-height: 1.7;
+}
+
+/* ── 主版面 ── */
+.board-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  margin-top: 16px;
+  align-items: start;
+}
+
+.stage-panel,
+.info-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(90, 60, 35, 0.08);
+}
+.stage-panel { padding: 14px; }
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.status-pill { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 4px rgba(47, 125, 79, 0.16);
+}
+.turn-chip {
+  font-size: 13px; font-weight: 700; color: var(--accent);
+  background: #fbeee7; border: 1px solid #f0d6c9;
+  border-radius: 999px; padding: 4px 12px;
+}
+.tip { margin: 8px 0 0; font-size: 13px; color: var(--ink-soft); }
+.daily-line {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--accent);
+  background: #fdf3ea;
+  border: 1px solid #f0d6c9;
+  border-radius: 10px;
+  padding: 8px 10px;
+  white-space: pre-line;
+}
+
+/* ★ 畫布外殼:高度用 aspect-ratio 撐,渲染器讀 clientWidth/clientHeight。
+   高度靠內容撐是不行的 —— 容器高度 0 的話 three 會拿到 0，畫面全黑而且不報錯。 */
+/* ★ 高度用「視窗高度扣掉上面那些」算,**不要**用 aspect-ratio 讓它自己長高 ——
+   9/10 的比例在 1400×900 的視窗會算出 702px 高,加上標題列與狀態列之後
+   棋盤下緣就掉到摺線以下(要捲動才看得到自己的底線)。
+   相機是 fitCamera 算出來的,畫布是寬是扁都裝得下,所以高度可以放心讓給視窗。 */
+.canvas-shell {
+  margin-top: 12px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #241a13;
+  height: clamp(320px, calc(100vh - 300px), 760px);
+}
+#game-container { width: 100%; height: 100%; }
+#game-container canvas { display: block; width: 100%; height: 100%; }
+
+/* ── 右側資訊欄 ── */
+.info-panel { display: flex; flex-direction: column; gap: 14px; }
+.info-card { padding: 14px 16px; }
+.info-card h2 { margin: 0 0 10px; font-size: 15px; }
+
+.field { display: block; margin-bottom: 10px; }
+.field span { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
+.field select {
+  width: 100%; padding: 8px 10px; font-size: 14px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: #fffdfa; color: var(--ink);
+}
+.field select:disabled { background: #f1e9df; color: #a5978a; cursor: not-allowed; }
+
+.button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+button {
+  font: inherit; font-size: 13px; padding: 9px 10px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: #fffdfa; color: var(--ink); cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+  /* ⚠ 觸控目標 ≥44px(教會的孩子多半用平板) */
+  min-height: 44px;
+}
+button:hover:not(:disabled) { background: #fdf3ea; border-color: var(--accent-soft); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+button.primary:hover:not(:disabled) { background: #85351f; border-color: #85351f; }
+
+.hint-line { margin: 0; font-size: 12.5px; line-height: 1.7; color: var(--ink-soft); }
+
+/* ── 結算 ── */
+.overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(30, 20, 14, 0.55);
+  padding: 20px;
+}
+.overlay-card {
+  background: var(--card); border-radius: 18px; padding: 22px;
+  max-width: 420px; width: 100%;
+  box-shadow: 0 24px 60px rgba(40, 25, 15, 0.35);
+}
+.overlay-card h2 { margin: 0 0 14px; font-size: 18px; line-height: 1.7; white-space: pre-line; }
+
+.hidden { display: none !important; }
+
+/* ── 窄螢幕:資訊欄移到棋盤下面 ── */
+@media (max-width: 960px) {
+  .board-layout { grid-template-columns: minmax(0, 1fr); }
+  .canvas-shell { max-height: 62vh; }
+}
