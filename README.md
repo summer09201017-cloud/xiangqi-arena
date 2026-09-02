@@ -19,6 +19,7 @@ Three.js 中國象棋 PWA。**線上正式站:<https://incandescent-stroopwafel-
 | | |
 |---|---|
 | 對局 | 人 vs AI,三檔難度;玩家可選執紅(先手)或執黑 |
+| ⛶ 全螢幕 | 畫布角落與側欄各一顆鈕,整個棋盤面板放大到全螢幕;全螢幕裡留「提示/後悔/視角/離開」小工具列。原生 Fullscreen API,iPhone Safari 沒有就退成 CSS 假全螢幕(同一套版面) |
 | 開局棋譜 | 全譜庫 / 中炮譜 / 飛相譜 / 起馬譜 / 仙人指路譜 / 不載入,AI 在**開局前 15 手**優先參考 |
 | 💡 AI 提示 | 借同一支引擎從玩家這邊算一手,綠圈=要動的棋、綠環/綠點=要去的地方 |
 | 📅 每日殘局 | 每天一組 **5 題**,全世界同一組同順序;每題分開記最少步數;只留 60 天 |
@@ -33,7 +34,7 @@ Three.js 中國象棋 PWA。**線上正式站:<https://incandescent-stroopwafel-
 npm install
 npm test          # 引擎 45 項 + 題庫 129 項
 npm run serve     # http://localhost:8801
-npm run check     # 另一個視窗:真瀏覽器冒煙 31 項
+npm run check     # 另一個視窗:真瀏覽器冒煙 37 項
 ```
 
 線上驗收:`CHECK_URL=https://incandescent-stroopwafel-31007a.pages.dev npm run check`
@@ -63,6 +64,7 @@ npx wrangler pages deploy . --project-name incandescent-stroopwafel-31007a --bra
 | 8 | **存檔格式** | 五款每日殘局全踩過:棋譜重播式存檔吃不下自訂起手局面,讀回來會**靜默重建成另一個局面**。這一版存盤面快照;而且每日殘局一律不進存檔。 |
 | 9 | **舊存檔鍵不可沿用** | 舊站是另一支引擎(WXF 字串棋譜),`xiangqi-3d-save-v3` 格式對不上。沿用同一個鍵去讀,會拿到「欄位看得懂、盤面擺不出來」的資料 —— 比沒有存檔更糟。新鍵 `xiangqi-arena-save-v1`,舊鍵不動不刪。 |
 | 10 | **棋盤掉到摺線下面** | `aspect-ratio: 9/10` 在 1400×900 算出 702px 高,加上標題列之後底線要捲動才看得到。改成 `height: clamp(320px, calc(100vh - 300px), 760px)` —— 相機是算出來的,畫布是寬是扁都裝得下。 |
+| 11 | **全螢幕要對「面板」不是對 canvas** | 0902 使用者:「下棋的畫面太小」。只把 canvas 全螢幕,「將軍/AI 思考中/結算」全看不到;結算蓋板原本在 body 層,進全螢幕後被壓在底下 ⇒ 搬進 `.stage-panel`。另外**別用 `:fullscreen` 選擇器列**:混一個 `:-webkit-full-screen` 不認得的瀏覽器會把整條規則丟掉,而 iPhone Safari 根本沒有元素全螢幕 ⇒ 一律 JS 掛 `.is-fs`,原生與 CSS 假全螢幕共用版面;容器尺寸改用 ResizeObserver 重量(元素全螢幕時 window 未必 resize)。 |
 
 ## 檔案
 
@@ -79,7 +81,7 @@ js/renderer.js      Three.js 渲染 + 2D/3D + fitCamera(移植後大幅擴充)
 js/app.js           全部接線
 test/rules.mjs      引擎驗算 45 項(長將/悔棋/開局譜/每日旁路)
 test/daily.mjs      題庫驗算 129 項(擺位/決定性/開著長將規則實打)
-scripts/browser-check.mjs  真瀏覽器冒煙 31 項
+scripts/browser-check.mjs  真瀏覽器冒煙 37 項
 ```
 
 ## 帳本四處(改動這站時要一起更新)

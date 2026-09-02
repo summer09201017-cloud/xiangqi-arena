@@ -48,6 +48,7 @@ class ArenaApp {
         this.aiThinking = false;
         this.hint = null;           // 💡 { positionKey, from, to }
         this.deferredPrompt = null;
+        this.pseudoFs = false;      // ⛶ 沒有原生全螢幕(iPhone Safari)時的 CSS 假全螢幕
 
         this.cacheElements();
         this.fillSelects();
@@ -71,6 +72,11 @@ class ArenaApp {
             overlay: $('gameOverOverlay'), winnerText: $('winnerText'),
             dailyNextButton: $('dailyNextButton'), dailyRetryButton: $('dailyRetryButton'),
             retryButton: $('retryButton'),
+            // ⛶ 全螢幕棋盤
+            fsButton: $('fsButton'), fsButton2: $('fsButton2'), fsToolbar: $('fsToolbar'),
+            fsHintButton: $('fsHintButton'), fsUndoButton: $('fsUndoButton'),
+            fsCameraButton: $('fsCameraButton'), fsExitButton: $('fsExitButton'),
+            stagePanel: document.querySelector('.stage-panel'),
         };
     }
 
@@ -122,6 +128,21 @@ class ArenaApp {
         el.cameraButton.addEventListener('click', () => {
             this.renderer.resetView();
             this.say('視角已重置。');
+        });
+
+        /* ⛶ 全螢幕棋盤(0902 使用者:「下棋的畫面太小」)。
+           工具列那三顆一律**轉呼叫側欄原本的鈕**(click()),不另寫一份邏輯 ——
+           原鈕 disabled 時 click() 本來就不會動,亮暗狀態也在 render() 一起同步。 */
+        el.fsButton.addEventListener('click', () => this.toggleFullscreen());
+        el.fsButton2.addEventListener('click', () => this.toggleFullscreen());
+        el.fsExitButton.addEventListener('click', () => this.exitFullscreen());
+        el.fsHintButton.addEventListener('click', () => el.hintButton.click());
+        el.fsUndoButton.addEventListener('click', () => el.undoButton.click());
+        el.fsCameraButton.addEventListener('click', () => el.cameraButton.click());
+        document.addEventListener('fullscreenchange', () => this.applyFullscreenClass());
+        document.addEventListener('webkitfullscreenchange', () => this.applyFullscreenClass());
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && this.pseudoFs) this.exitFullscreen();
         });
         el.saveButton.addEventListener('click', () => this.saveGame());
         el.loadButton.addEventListener('click', () => this.loadGame());
@@ -505,6 +526,55 @@ class ArenaApp {
     }
     hideOverlay() { this.el.overlay.classList.add('hidden'); }
 
+    /* ── ⛶ 全螢幕棋盤 ──
+       對象是 .stage-panel(狀態列/提示/結算蓋板都在裡面),不是 canvas:
+       只把 canvas 全螢幕的話,「將軍!」「AI 思考中」「結算」全部看不到。
+       iPhone Safari 沒有元素全螢幕 ⇒ 退成 CSS 假全螢幕(position:fixed 蓋滿視窗),版面同一套。 */
+    nativeFullscreenElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement || null;
+    }
+    isFullscreen() { return Boolean(this.nativeFullscreenElement()) || this.pseudoFs; }
+    toggleFullscreen() { return this.isFullscreen() ? this.exitFullscreen() : this.enterFullscreen(); }
+    async enterFullscreen() {
+        const target = this.el.stagePanel;
+        const request = target.requestFullscreen || target.webkitRequestFullscreen;
+        if (request) {
+            try {
+                const result = request.call(target, { navigationUI: 'hide' });
+                // 舊 WebKit 不回 promise;回 promise 的也不等超過一秒半(卡住就走假全螢幕)
+                const isThenable = Boolean(result && typeof result.then === 'function');
+                const settle = new Promise((resolve) => setTimeout(resolve, isThenable ? 1500 : 350));
+                await (isThenable ? Promise.race([result, settle]) : settle);
+            } catch (_) { /* 被拒(iframe 沒授權、非使用者手勢)⇒ 走假全螢幕 */ }
+        }
+        if (!this.nativeFullscreenElement()) this.pseudoFs = true;
+        this.applyFullscreenClass();
+    }
+    exitFullscreen() {
+        this.pseudoFs = false;
+        if (this.nativeFullscreenElement()) {
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            try {
+                const result = exit.call(document);
+                if (result && typeof result.catch === 'function') result.catch(() => {});
+            } catch (_) { /* 已經不在全螢幕了 */ }
+        }
+        this.applyFullscreenClass();
+    }
+    applyFullscreenClass() {
+        const on = this.isFullscreen();
+        const el = this.el;
+        el.stagePanel.classList.toggle('is-fs', on);
+        el.stagePanel.classList.toggle('pseudo-fs', on && !this.nativeFullscreenElement());
+        document.body.classList.toggle('fs-active', on);
+        el.fsButton.title = on ? '離開全螢幕' : '全螢幕棋盤';
+        el.fsButton.setAttribute('aria-label', el.fsButton.title);
+        el.fsButton2.textContent = on ? '⛶ 離開全螢幕' : '⛶ 全螢幕棋盤(畫面放大)';
+        /* 版面一變,畫布尺寸就變 ⇒ 相機要重裝。renderer 自己有 ResizeObserver 看著容器,
+           這裡再補一次是保險(等瀏覽器排完版的下一幀)。 */
+        requestAnimationFrame(() => requestAnimationFrame(() => this.renderer.onWindowResize()));
+    }
+
     say(text) { this.el.statusText.textContent = text; }
 
     render() {
@@ -538,6 +608,9 @@ class ArenaApp {
         el.hintButton.disabled = this.aiThinking
             || this.gameLogic.isGameOver
             || this.gameLogic.currentPlayer !== this.playerSide();
+        // ⛶ 全螢幕工具列跟側欄同步(它們只是轉呼叫側欄的鈕)
+        el.fsUndoButton.disabled = el.undoButton.disabled;
+        el.fsHintButton.disabled = el.hintButton.disabled;
 
         const rotatable = this.viewMode === '2d';
         el.rotateLeftButton.disabled = !rotatable;

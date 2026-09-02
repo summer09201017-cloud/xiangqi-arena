@@ -126,6 +126,51 @@ body {
 #game-container { width: 100%; height: 100%; }
 #game-container canvas { display: block; width: 100%; height: 100%; }
 
+/* ── ⛶ 全螢幕棋盤(0902 使用者:「下棋的畫面太小」)──
+   全螢幕的對象是 .stage-panel(不是 canvas):狀態列/提示/結算蓋板都住在裡面,
+   進全螢幕後還看得到「將軍/AI 思考中/結算」。
+   ★ 不用 :fullscreen 選擇器 —— 選擇器列裡混一個 :-webkit-full-screen,不認得的瀏覽器會把
+     整條規則丟掉;而 iPhone Safari 根本沒有元素全螢幕。所以一律由 JS 掛 .is-fs,
+     原生全螢幕與 CSS 假全螢幕(.pseudo-fs)共用同一套版面。 */
+.canvas-shell { position: relative; }
+.fs-btn {
+  position: absolute; top: 10px; right: 10px; z-index: 5;
+  min-width: 44px; min-height: 44px; padding: 0 12px;
+  font-size: 20px; line-height: 1;
+  background: rgba(255, 253, 250, 0.9); border-color: rgba(255, 253, 250, 0.6);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.fs-toolbar { display: none; gap: 8px; flex-wrap: wrap; }
+.fs-toolbar button { min-height: 40px; padding: 6px 10px; }
+.button-row .span2 { grid-column: 1 / -1; }
+
+body.fs-active { overflow: hidden; }
+.stage-panel.is-fs {
+  display: flex; flex-direction: column;
+  padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+           max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  border: 0; border-radius: 0; box-shadow: none;
+  background: #1b130e; color: #f6efe6;
+}
+/* 沒有原生全螢幕的瀏覽器(iPhone Safari):用 fixed 蓋滿視窗,效果一樣只是留著瀏覽器列 */
+.stage-panel.is-fs.pseudo-fs { position: fixed; inset: 0; z-index: 40; }
+.stage-panel.is-fs .status-pill { color: #f6efe6; }
+.stage-panel.is-fs .tip { color: #d9c8b4; margin-top: 4px; }
+.stage-panel.is-fs .fs-toolbar { display: flex; }
+.stage-panel.is-fs .fs-toolbar button { background: #2b1f17; color: #f6efe6; border-color: #5a4536; }
+.stage-panel.is-fs .fs-toolbar button.primary { background: var(--accent); border-color: var(--accent); }
+.stage-panel.is-fs .fs-toolbar button:disabled { opacity: 0.4; }
+.stage-panel.is-fs .canvas-shell {
+  flex: 1 1 auto; min-height: 0;
+  height: auto; max-height: none;   /* 蓋掉平時的 clamp(...) 與窄螢幕的 62vh */
+  margin-top: 8px; border-radius: 10px;
+}
+/* 手機橫向很矮:提示那一行讓給棋盤,工具列也縮一點 */
+@media (max-height: 500px) {
+  .stage-panel.is-fs .tip { display: none; }
+  .stage-panel.is-fs .fs-toolbar button { min-height: 36px; padding: 4px 8px; font-size: 12px; }
+}
+
 /* ── 右側資訊欄 ── */
 .info-panel { display: flex; flex-direction: column; gap: 14px; }
 .info-card { padding: 14px 16px; }

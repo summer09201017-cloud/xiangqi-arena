@@ -21,7 +21,7 @@
       <p class="subtitle">點選棋子與交叉點即可走子;3D 視角可用滑鼠拖曳旋轉、雙指縮放。</p>
       <!-- 🏷 版本簡歷(game-must-haves ⑦):寫清楚這一版做了什麼 + 前幾版一行 -->
       <p id="verTag" class="ver-tag">
-        v1 · 重建版(從此有源碼)· 📅 每日殘局一組 5 題 · 💡 AI 提示 · 五種開局譜 · 存讀檔 · 2D/3D
+        v2 · ⛶ 全螢幕棋盤(棋盤放大到整個畫面)· v1 重建版(從此有源碼)· 📅 每日殘局一組 5 題 · 💡 AI 提示 · 五種開局譜 · 存讀檔 · 2D/3D
       </p>
     </header>
 
@@ -30,11 +30,35 @@
         <div class="status-row">
           <div class="status-pill"><span class="dot"></span><span id="statusText">點選任一紅棋開始。</span></div>
           <div id="turnChip" class="turn-chip">紅方行棋</div>
+          <!-- ⛶ 全螢幕時右側欄看不到 ⇒ 把下棋中最常按的四顆帶進來(平時隱藏,CSS 在 .is-fs 才顯示) -->
+          <div id="fsToolbar" class="fs-toolbar">
+            <button id="fsHintButton" type="button" title="讓 AI 幫你想一手">💡 提示</button>
+            <button id="fsUndoButton" type="button">後悔一步</button>
+            <button id="fsCameraButton" type="button">重置視角</button>
+            <button id="fsExitButton" type="button" class="primary">⛶ 離開全螢幕</button>
+          </div>
         </div>
         <p id="tipText" class="tip">先點你的棋子,再點要移動到的位置。</p>
         <!-- 📅 每日殘局的常駐狀態行(只有每日模式看得到) -->
         <p id="dailyLine" class="daily-line hidden"></p>
-        <div class="canvas-shell"><div id="game-container"></div></div>
+        <div class="canvas-shell">
+          <!-- ⛶ 全螢幕棋盤(0902 使用者:「下棋的畫面太小」)—— 鈕放在畫布角落,任何版面都看得到 -->
+          <button id="fsButton" class="fs-btn" type="button" title="全螢幕棋盤" aria-label="全螢幕棋盤">⛶</button>
+          <div id="game-container"></div>
+        </div>
+
+        <!-- 結算。★ 一定要住在 .stage-panel 裡面:全螢幕的對象是這個面板,
+             放在外面的話進全螢幕後結算蓋板被壓在底下、看不到。 -->
+        <div id="gameOverOverlay" class="overlay hidden">
+          <div class="overlay-card">
+            <h2 id="winnerText"></h2>
+            <div class="button-row">
+              <button id="dailyNextButton" class="primary hidden" type="button">📅 下一題</button>
+              <button id="dailyRetryButton" class="hidden" type="button">🔁 這題再來一次</button>
+              <button id="retryButton" class="primary" type="button">再來一局</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <aside class="info-panel">
@@ -63,6 +87,7 @@
             <button id="loadButton" type="button">讀檔</button>
             <button id="rotateLeftButton" type="button">2D 左轉</button>
             <button id="rotateRightButton" type="button">2D 右轉</button>
+            <button id="fsButton2" class="span2" type="button">⛶ 全螢幕棋盤(畫面放大)</button>
             <button id="installButton" class="hidden" type="button">安裝到手機</button>
           </div>
         </section>
@@ -103,18 +128,6 @@
         </section>
       </aside>
     </main>
-  </div>
-
-  <!-- 結算 -->
-  <div id="gameOverOverlay" class="overlay hidden">
-    <div class="overlay-card">
-      <h2 id="winnerText"></h2>
-      <div class="button-row">
-        <button id="dailyNextButton" class="primary hidden" type="button">📅 下一題</button>
-        <button id="dailyRetryButton" class="hidden" type="button">🔁 這題再來一次</button>
-        <button id="retryButton" class="primary" type="button">再來一局</button>
-      </div>
-    </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

@@ -37,6 +37,12 @@ class ChessRenderer {
         this.animatingPieces = []; // { mesh, targetPos, startTime, duration }
         
         window.addEventListener('resize', this.onWindowResize.bind(this), false);
+        /* ⛶ 容器尺寸一變就重量(全螢幕進出、側欄收合、轉向)——
+           window 的 resize 只在視窗變時才響;元素全螢幕時容器變了、視窗未必變。 */
+        if (typeof ResizeObserver !== 'undefined') {
+            this.resizeObserver = new ResizeObserver(() => this.onWindowResize());
+            this.resizeObserver.observe(this.container);
+        }
         // 支援滑鼠與觸控點擊
         this.container.addEventListener('pointerdown', this.onMouseClick.bind(this), false);
     }

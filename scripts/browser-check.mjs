@@ -38,7 +38,7 @@ ok(await page.evaluate(() => !!window.app), "app 起得來(window.app 在)");
 /* ★★ 棋盤不可以溢出 —— 舊版線上那支就是被切掉紅方底線(實機截圖看得到)。
    量的是「畫布有沒有把整張棋盤裝進去」:相機是算出來的,所以只要畫布尺寸對,
    四個角的棋子投影都應該落在畫布內。 */
-const fit = await page.evaluate(() => {
+const measureFit = () => page.evaluate(() => {
   const r = window.app.renderer;
   const canvas = r.renderer.domElement;
   const rect = canvas.getBoundingClientRect();
@@ -54,6 +54,7 @@ const fit = await page.evaluate(() => {
     corners: corners.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`),
   };
 });
+const fit = await measureFit();
 ok(fit.w > 100 && fit.h > 100, `畫布有真實尺寸(${Math.round(fit.w)}×${Math.round(fit.h)})`);
 ok(fit.inside, "★★ 棋盤四個角都在畫布內(舊版就是這裡爆板、紅方底線被切掉)",
   `canvas ${Math.round(fit.w)}×${Math.round(fit.h)} corners=${fit.corners.join(" / ")}`);
@@ -65,6 +66,38 @@ const shell = await page.evaluate(() => {
 });
 ok(shell.bottom <= shell.vh + 1, "棋盤整片在第一屏內(不用捲動)",
   `畫布底 ${Math.round(shell.bottom)} vs 視窗高 ${shell.vh}`);
+
+/* ── ⛶ 全螢幕棋盤(0902 使用者:「下棋的畫面太小」)──
+   全螢幕的對象是 .stage-panel:狀態列與結算蓋板都要一起進去。
+   無頭瀏覽器裡原生 requestFullscreen 可能成功也可能被拒 —— 兩條路都要通(被拒就走 CSS 假全螢幕)。 */
+ok(await page.locator("#fsButton").count() === 1 && await page.locator("#fsButton2").count() === 1,
+  "棋盤角落與側欄都有 ⛶ 全螢幕鈕");
+const fsState = () => page.evaluate(() => {
+  const panel = document.querySelector(".stage-panel");
+  const c = document.querySelector("#game-container canvas").getBoundingClientRect();
+  return {
+    isFs: panel.classList.contains("is-fs"), pseudo: panel.classList.contains("pseudo-fs"),
+    native: !!document.fullscreenElement, w: c.width, h: c.height, vw: innerWidth, vh: innerHeight,
+    toolbar: getComputedStyle(document.getElementById("fsToolbar")).display !== "none",
+    overlayInside: !!panel.querySelector("#gameOverOverlay"),
+    statusInside: !!panel.querySelector("#statusText"),
+  };
+});
+await page.locator("#fsButton").click();
+await page.waitForTimeout(1200);
+const fs = await fsState();
+ok(fs.isFs, `按 ⛶ 進了全螢幕(${fs.native ? "原生" : "CSS 假全螢幕"})`, JSON.stringify(fs));
+ok(fs.w >= fs.vw * 0.9 && fs.h > fit.h * 1.25,
+  `★ 全螢幕後畫布真的變大:${Math.round(fit.w)}×${Math.round(fit.h)} → ${Math.round(fs.w)}×${Math.round(fs.h)}(視窗 ${fs.vw}×${fs.vh})`);
+ok(fs.toolbar && fs.statusInside && fs.overlayInside,
+  "全螢幕裡看得到狀態列 + 提示/後悔/視角/離開 工具列,結算蓋板也在同一個面板內", JSON.stringify(fs));
+const fit2 = await measureFit();
+ok(fit2.inside, "★ 全螢幕(寬扁畫布)下棋盤四角仍在畫布內", fit2.corners.join(" / "));
+await page.locator("#fsExitButton").click();
+await page.waitForTimeout(1000);
+const fsAfter = await fsState();
+ok(!fsAfter.isFs && Math.abs(fsAfter.h - fit.h) < 4,
+  "離開全螢幕:版面與畫布尺寸回到原樣", `${Math.round(fsAfter.h)} vs ${Math.round(fit.h)}`);
 
 /* ★★ 棋子上的字方向 —— 這是一個**只有放大看才看得出來**的缺陷:
    圓柱頂面 UV 配上 rotateX(π/2) 之後字是轉 90° 的,而象棋有一半的字(車/士/兵/王)
