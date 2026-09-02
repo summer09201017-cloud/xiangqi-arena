@@ -1,0 +1,63 @@
+============================================================
+3D 象棋對局場(xiangqi-arena)— 交接說明(讀我-HANDOFF.txt)
+更新:2026-09-03 凌晨(HFP 機・Fable 5.1)
+============================================================
+
+★ 這是什麼
+  Three.js 中國象棋 PWA「對局場」。線上 https://incandescent-stroopwafel-31007a.pages.dev(網址是 Netlify 時代的亂數名,不改)
+  GitHub summer09201017-cloud/xiangqi-arena(分支 master)。
+  Cloudflare Pages 專案 incandescent-stroopwafel-31007a,直傳站(未連 git ⇒ push 不會上線)。
+  ★ 這站 0901 以前沒有源碼(0817 鏡像搬遷後正本失蹤),0902 使用者拍板重建 ⇒ 本 repo。詳見 README.md 第一段。
+
+★ 現在到哪(2026-09-03)
+  ✅ 已完成:
+     v1 重建版(0902,828a06e / f1ab8e7):五種開局譜・盤面快照存讀檔・2D/3D 視角・長將規則・悔棋・
+        💡 AI 提示・📅 每日殘局一組 5 題・統計打點・npm run stage 部署包
+     v2 ⛶ 全螢幕棋盤(0902,f06ddac):使用者原話「要能全螢幕,因下棋的畫面太小」。
+        全螢幕對象是 .stage-panel 面板(狀態列/提示/結算都在裡面),面板內小工具列(提示/後悔/視角/離開),
+        原生 Fullscreen API,iPhone Safari 沒有就退成 CSS 假全螢幕;renderer 加 ResizeObserver。
+        實量:桌機 1280×720 畫布 858×420 → 1260×633;手機橫向 844×390 763×242 → 824×330。
+  ⏩ 進行中:無。
+  📋 待使用者拍板:手機橫向全螢幕棋盤仍偏小(3D 斜視角受高度限制)要不要在全螢幕時自動切 2D 俯視。
+  git 實況(交接前查):status 乾淨、HEAD == origin/master、未推 0。
+
+★ 怎麼跑 / 測 / 部署
+  npm install
+  npm test              # test/rules.mjs 45 項 + test/daily.mjs 129 項
+  npm run serve         # http://localhost:8801(另一個視窗)
+  npm run check         # 真瀏覽器冒煙 37 項(含全螢幕 6 項:原生與假全螢幕兩路)
+  CHECK_URL=https://incandescent-stroopwafel-31007a.pages.dev npm run check
+  部署(⚠ 兩步,而且 --branch main 不能省,否則只建 preview):
+  npm run stage
+  npx wrangler pages deploy .deploy --project-name incandescent-stroopwafel-31007a --branch main
+  改任何檔先 bump sw.js 的 CACHE_NAME(現在 xiangqi-3d-shell-v3);新增上線檔要補 scripts/stage.mjs SHIP + sw.js ASSETS_TO_CACHE。
+  線上驗收看內容:
+  curl -s "https://incandescent-stroopwafel-31007a.pages.dev/sw.js?bust=1" | grep "CACHE_NAME ="
+
+★ 本機地雷
+  - 直傳站:git push 不會部署;本地分支 master、CF production branch 是 main ⇒ --branch main 必寫。
+  - SW cache-first:忘了 bump,舊使用者永遠拿舊版。
+  - 全螢幕:不要改回 :fullscreen 選擇器(混 -webkit- 整條失效);結算蓋板要留在 .stage-panel 內;
+    .pseudo-fs(iPhone)路徑不能拆。正本 skill embed-fullscreen-fit #8。
+  - 尺寸一律看容器不看 window(舊站爆板 + 點擊偏移的同一個病根)。
+  - 每日殘局不吃開局譜(effectiveBook 結構性強制,實測 16 題有 7 題會被譜咬到)、不進存檔。
+  - 存檔鍵 xiangqi-arena-save-v1;舊站鍵 xiangqi-3d-save-v3 不讀不刪。
+  - README 的「🕳 建構期間真的踩過的坑」11 條,接手前值得全讀。
+
+★ 檔案在哪
+  index.html / css/style.css / manifest.webmanifest / icons/ / sw.js
+  js/pieces.js(走法)/ js/gameLogic.js(盤面+悔棋+長將)/ js/openings.js(開局譜)/ js/puzzles.js(題庫)/
+  js/save.js(存讀檔)/ js/ai.js / js/renderer.js(Three.js + fitCamera + ResizeObserver)/ js/app.js(接線 + 全螢幕)
+  test/rules.mjs / test/daily.mjs / scripts/browser-check.mjs / scripts/serve.mjs / scripts/stage.mjs
+  screenshots/uv-8.png(棋子貼字方向八種組合並排,挑正解用)
+  給人讀:README.md;給 AI:CLAUDE.md;待做:roadmap.md
+  施工單:hfpc-claude-skills/references/象棋對局場-每日殘局移植規格-2026-09-01.md
+
+★ 帳本四處(改動這站時要一起更新;本輪只是功能升級,四處都不用動)
+  作品集 hfpc-portfolio data.js 的 3d-chess-arena / sites.json ×2 / 統計 Worker NAMES / manual-deploy-map
+
+★ 下一步
+  roadmap.md 🔜 第一列(手機橫向全螢幕仍偏小,待使用者拍板)。
+
+★ 一鍵裝齊 skill
+  /take-over(pull hfpc-claude-skills → install.bat → sites.json → /sit-down)
