@@ -18,6 +18,14 @@
         原生 Fullscreen API,iPhone Safari 沒有就退成 CSS 假全螢幕;renderer 加 ResizeObserver。
         實量:桌機 1280×720 畫布 858×420 → 1260×633;手機橫向 844×390 763×242 → 824×330。
   ⏩ 進行中:無。
+  🩹 0903(agape250 機)兩件修好、已部署(SW v4):
+     ① 統計打點從上線起全部 404:網址寫 /p(Worker 只認 /api/ping)、停留秒數參數寫 s(要 t)
+        ⇒ 0902 上線到 0903 一天多,/api/summary 裡完全沒有這站。📡 打點驗收要看**回應狀態碼**,不是「有沒有送出」(0903 實錘:端點寫 /p 而非 /api/ping,請求照樣送出、sendBeacon 不看回應、前端零紅燈,而 Worker 回 404、資料一筆不進)。
+        npm run check 加兩項:攔 response 驗 200、斷言沒有任何打點被退回 404。
+     ② 悔棋那一段的日期假紅:它沿用上一段留下的「每日殘局」局面,而每日題是日期種子生成的——
+        09-03 那一組裡紅方最佳一手直接把棋下完 ⇒ 結算蓋板蓋住「後悔一步」,click 等 30 秒逾時。
+        0902 的題目不會 ⇒ 當天全綠、隔天沒人改動卻自己紅了(本機與線上都紅,乾淨 HEAD 也紅)。
+        修法=悔棋前先按「重新開局」回一般模式,在確定性盤面上驗;日期不可以是斷言的一部分。
   📋 待使用者拍板:手機橫向全螢幕棋盤仍偏小(3D 斜視角受高度限制)要不要在全螢幕時自動切 2D 俯視。
   git 實況(交接前查):status 乾淨、HEAD == origin/master、未推 0。
 
@@ -25,12 +33,12 @@
   npm install
   npm test              # test/rules.mjs 45 項 + test/daily.mjs 129 項
   npm run serve         # http://localhost:8801(另一個視窗)
-  npm run check         # 真瀏覽器冒煙 37 項(含全螢幕 6 項:原生與假全螢幕兩路)
+  npm run check         # 真瀏覽器冒煙 40 項(含全螢幕 6 項 + 📡 打點 2 項 + 悔棋前回一般模式 1 項)
   CHECK_URL=https://incandescent-stroopwafel-31007a.pages.dev npm run check
   部署(⚠ 兩步,而且 --branch main 不能省,否則只建 preview):
   npm run stage
   npx wrangler pages deploy .deploy --project-name incandescent-stroopwafel-31007a --branch main
-  改任何檔先 bump sw.js 的 CACHE_NAME(現在 xiangqi-3d-shell-v3);新增上線檔要補 scripts/stage.mjs SHIP + sw.js ASSETS_TO_CACHE。
+  改任何檔先 bump sw.js 的 CACHE_NAME(現在 xiangqi-3d-shell-v4);新增上線檔要補 scripts/stage.mjs SHIP + sw.js ASSETS_TO_CACHE。
   線上驗收看內容:
   curl -s "https://incandescent-stroopwafel-31007a.pages.dev/sw.js?bust=1" | grep "CACHE_NAME ="
 

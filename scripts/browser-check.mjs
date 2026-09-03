@@ -27,6 +27,11 @@ const ok = (cond, msg, note = "") => {
 const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
+/* 📡 打點驗收:攔「回應」不是「請求」——0903 實錘,端點寫錯(/p 而非 /api/ping)時
+   請求照樣送得出去、sendBeacon 不看回應、前端零紅燈,而 Worker 回 404、一筆資料都沒進。
+   這站 0902 上線到 0903 一天多,/api/summary 裡完全沒有它 ⇒ 只有狀態碼看得出來。 */
+const beacons = [];
+page.on("response", (r) => { const u = r.url(); if (u.includes("hfpc-play-stats")) beacons.push({ u, s: r.status() }); });
 await page.goto(URL + "/?v=" + Date.now(), { waitUntil: "networkidle" });
 await page.waitForTimeout(2200);
 
@@ -202,6 +207,15 @@ ok(await page.evaluate(() => {
 }), "每日模式按存檔會**講原因**(不是靜靜不做)");
 
 /* ── 悔棋 ── */
+/* ★ 0903 修假紅:這一段原本沿用上一段留下的「每日殘局」局面,而每日題是日期種子生成的 ——
+   今天(09-03)那一組裡,紅方最佳一手直接把棋下完 ⇒ #gameOverOverlay 蓋住 #undoButton,
+   locator.click 等 30 秒逾時。0902 的題目不會,所以當天全綠、隔天無人改動卻自己紅了。
+   ⇒ 悔棋要在**確定性的開局盤面**上驗(按「重新開局」回一般模式),日期不可以是斷言的一部分。
+   同族:skill test-clock-inject「時間是環境,不是規則」。 */
+await page.locator("#newGameButton").click();
+await page.waitForTimeout(900);
+ok(await page.evaluate(() => !window.app.daily && document.getElementById("gameOverOverlay").classList.contains("hidden")),
+  "悔棋前先回到一般模式的開局盤面(不吃當天的殘局)");
 await page.evaluate(() => {
   const a = window.app;
   // 走一步(和真手指同一條 handleSquareClick 管線)
@@ -221,6 +235,10 @@ if (canUndo) {
   ok(await page.evaluate((s) => window.app.gameLogic.positionKey() !== s, beforeSig),
     "悔棋之後局面真的變了");
 }
+
+const opens = beacons.filter((b) => /[?&]g=xiangqi-arena(&|$)/.test(b.u));
+ok(opens.length > 0 && opens.every((b) => b.s === 200), "📡 開啟打點:伺服器收下(200)", JSON.stringify(opens));
+ok(!beacons.some((b) => b.s === 404), "📡 沒有任何打點被伺服器退回 404(端點/參數寫對了)", JSON.stringify(beacons.filter((b) => b.s !== 200)));
 
 ok(errors.length === 0, "整場零 pageerror", errors.join(" | ").slice(0, 240));
 

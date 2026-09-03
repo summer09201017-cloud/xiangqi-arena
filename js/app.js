@@ -635,10 +635,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /* 📡 統計打點(這站以前完全沒接 = 統計盲區)。
        零個資:只送站名與事件,沒有 cookie、沒有帳號。離線時 sendBeacon 靜默失敗,不影響下棋。
-       雙平台化:pages.dev 與 workers.dev 都認得(搬站時不會斷流)。 */
+       雙平台化:pages.dev 與 workers.dev 都認得(搬站時不會斷流)。
+       ⚠ 0903 修:端點是 /api/ping(不是 /p)、停留秒數的參數叫 t(不是 s)——寫錯的話 Worker 回 404 或丟棄,
+       打點全部靜默消失而前端零紅燈(本站 0902~0903 一天多的資料就是這樣沒的)。 */
     try {
         const ping = (evt) => {
-            try { navigator.sendBeacon(`https://hfpc-play-stats.summer09201017.workers.dev/p?g=${evt}`); }
+            try { navigator.sendBeacon(`https://hfpc-play-stats.summer09201017.workers.dev/api/ping?g=${evt}`); }
             catch (_) { /* statistics are best-effort */ }
         };
         ping('xiangqi-arena');
@@ -647,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dwell = () => {
             if (sent) return;
             sent = true;
-            ping(`xiangqi-arena-dwell&s=${Math.round((Date.now() - openedAt) / 1000)}`);
+            ping(`xiangqi-arena-dwell&t=${Math.round((Date.now() - openedAt) / 1000)}`);
         };
         document.addEventListener('visibilitychange', () => { if (document.hidden) dwell(); });
         window.addEventListener('pagehide', dwell);

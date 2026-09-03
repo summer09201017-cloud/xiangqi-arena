@@ -48,6 +48,7 @@ npx wrangler pages deploy . --project-name incandescent-stroopwafel-31007a --bra
 
 - 專案**未連 git**,是**直傳站** ⇒ `git push` 不會上線,一定要跑上面那行。
 - 改任何檔案都要 bump `sw.js` 的 `CACHE_NAME`(cache-first,不 bump 舊使用者永遠拿舊版)。
+  (現在 v4;0903 修統計打點端點 /p→/api/ping 與停留參數 s→t,見 讀我-HANDOFF 的 🩹 段)
 - 線上驗收**看內容不看狀態碼**。
 
 ## 🕳 建構期間真的踩過的坑
