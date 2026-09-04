@@ -121,49 +121,78 @@ section("②b 每日一組:" + DAILY_SET_SIZE + " 題、決定性、不重複、
   ok("400 天內題庫每一題都出過場", seen.size === DAILY_PUZZLES.length, `${seen.size}/${DAILY_PUZZLES.length}`);
 }
 
-/* ══ ③ 每題 AI 實打(解得動的機器證據)══ */
-section("③ 紅 AI(高級)實打每一題(3 試 ≥2 勝、單局 ≤120 步)");
+/* ══ ③ 每題「N 手連將殺」窮舉驗證(解得動的機器證據)══
+   ★ 2026-09-04 換掉舊驗法。舊的是「紅 AI(高級)對打 3 試 ≥2 勝、120 步內」——
+     那是**抽樣**,只證明「總會贏」,不證明難度,而且黑方原本沒有攻擊子,怎麼打都贏。
+     而且新引擎高級檔一手要 1.1 秒,18 題 ×3 試 ×120 步 = 要跑好幾小時。
+   ⇒ 改成窮舉求解:紅方每一手都將軍,不管黑方怎麼應,mateIn 手內將死。
+     這是**保證**不是抽樣,而且快(全部 18 題數秒內跑完)。 */
+
+function otherSide(c) { return c === "red" ? "black" : "red"; }
+function makeMateSolver(ai) {
+  function checkingMoves(board, atk) {
+    const out = [];
+    for (const m of ai.getAllLegalMoves(board, atk)) {
+      const cap = ai.makeSimulatedMove(board, m);
+      const gives = ai.isInCheck(board, otherSide(atk));
+      const dead = ai.getAllLegalMoves(board, otherSide(atk)).length === 0;
+      ai.undoSimulatedMove(board, m, cap);
+      if (gives || dead) out.push(m);
+    }
+    return out;
+  }
+  function mateIn(board, atk, n) {
+    if (n <= 0) return null;
+    for (const m of checkingMoves(board, atk)) {
+      const cap = ai.makeSimulatedMove(board, m);
+      const replies = ai.getAllLegalMoves(board, otherSide(atk));
+      let good = false;
+      if (replies.length === 0) good = true;
+      else if (n > 1) {
+        good = true;
+        for (const r of replies) {
+          const c2 = ai.makeSimulatedMove(board, r);
+          if (!mateIn(board, atk, n - 1)) good = false;
+          ai.undoSimulatedMove(board, r, c2);
+          if (!good) break;
+        }
+      }
+      ai.undoSimulatedMove(board, m, cap);
+      if (good) return m;
+    }
+    return null;
+  }
+  return mateIn;
+}
+
+section("③ 每題窮舉驗「N 手連將殺」(紅先,黑方怎麼應都逃不掉)");
 {
   const ai = new ChessAI();
-  const origLog = console.log;
+  const mateIn = makeMateSolver(ai);
   for (const p of DAILY_PUZZLES) {
-    let wins = 0;
-    const detail = [];
-    for (let attempt = 0; attempt < 3; attempt++) {
-      /* ⚠⚠ 施工單 §5.2:實打**必須開著長將規則**驗,否則驗的不是同一件事 ——
-         裸著盤面陣列推的話,紅方可以靠「一直將軍繞圈」贏,而真的在遊戲裡走
-         那條路會被 isAllowedMove 擋下來 ⇒ 收進一題「機器說解得動、孩子解不動」的死題。
-         ⇒ 這裡驅動真的 GameLogic,每一步都過 isAllowedMove。 */
-      const g = new GameLogic();
-      g.initGame(buildPuzzleBoard(p));
-      let winner = null;
-      console.log = () => {};                     // AI 每步都 console.log,靜音
-      for (let ply = 0; ply < 120 && !winner; ply++) {
-        const turn = g.currentPlayer;
-        let move = ai.calculateBestMove(g.getBoardState(), turn, "hard");
-        // AI 的走法產生器是簡化版(不含長將)⇒ 被規則擋掉就換一步真正走得動的
-        if (move && !g.isAllowedMove(move.from.row, move.from.col, move.to.row, move.to.col)) {
-          move = null;
-          outer:
-          for (let r = 0; r < 10 && !move; r++) {
-            for (let c = 0; c < 9; c++) {
-              const piece = g.getBoardState()[r][c];
-              if (!piece || piece.color !== turn) continue;
-              const legal = g.getLegalMovesForPiece(r, c);
-              if (legal.length) { move = { from: { row: r, col: c }, to: legal[0] }; break outer; }
-            }
-          }
-        }
-        if (!move) { winner = turn === "red" ? "black" : "red"; break; }   // 無步可走=困斃
-        const captured = g.getBoardState()[move.to.row][move.to.col];
-        g.executeMove(move.from.row, move.from.col, move.to.row, move.to.col);
-        if (captured && captured.type === "king") { winner = turn; break; }
-      }
-      console.log = origLog;
-      if (winner === "red") wins++;
-      detail.push(winner || "逾步");
-    }
-    ok(`「${p.name}」紅方解得動(開著長將規則實打・3 試 ${wins} 勝)`, wins >= 2, detail.join(","));
+    const board = buildPuzzleBoard(p);
+    const t0 = Date.now();
+    const hit = mateIn(board, "red", p.mateIn);
+    const shorter = p.mateIn > 1 ? mateIn(board, "red", p.mateIn - 1) : null;
+    ok(`「${p.name}」${p.mateIn} 手連將殺成立(${Date.now() - t0}ms)`, !!hit);
+    ok(`「${p.name}」剛好 ${p.mateIn} 手(${p.mateIn - 1} 手殺不掉)`, !shorter,
+       shorter && JSON.stringify(shorter));
+  }
+}
+
+section("③-b 題目本身的難度前提(舊題庫就是敗在這裡)");
+{
+  const ai = new ChessAI();
+  for (const p of DAILY_PUZZLES) {
+    const board = buildPuzzleBoard(p);
+    const atk = p.black.filter(([t]) => t === "rook" || t === "cannon" || t === "knight");
+    ok(`「${p.name}」黑方有反擊子(${atk.length} 顆)`, atk.length > 0);
+    const blk = ai.getAllLegalMoves(board, "black").length;
+    ok(`「${p.name}」黑方開局 ${blk} 步可應(要 ≥6)`, blk >= 6);
+    ok(`「${p.name}」hint 不洩解法(只講規則)`,
+       typeof p.hint === "string" && p.hint.indexOf("手連將殺") >= 0);
+    ok(`「${p.name}」紅方開局沒有被將`, !ai.isInCheck(board, "red"));
+    ok(`「${p.name}」黑方開局沒有被將(不是一開始就在將軍中)`, !ai.isInCheck(board, "black"));
   }
 }
 
@@ -185,8 +214,8 @@ section("④⑤ 開局理智:紅有步可走、黑第一步吃不到紅帥");
 }
 
 /* ══ ⑥ 💡 AI 提示:提示出來的那一手,玩家一定點得動 ══
-   app.js 的 showHint 借 ai.calculateBestMove 當提示,而 ai.js 的 getAllLegalMoves
-   自己註解就寫著「簡化版,不考慮將軍/被將軍」⇒ 它產出的走法**不保證**過得了
+   app.js 的 showHint 借 ai.calculateBestMove 當提示,而 ai.js 的走法產生器與 gameLogic 是兩支程式碼
+   ⇒ 它產出的走法**不保證**過得了
    gameLogic.isValidMove(玩家點擊真正會走的那條路)。
    一旦分岔,症狀是「提示叫我走這步,但棋子點不動」——遊戲看起來壞了,而使用者是對的。
    ⇒ 這一段就是釘死那條分岔:每一題都真的跑一次紅方提示,逐手驗合法。

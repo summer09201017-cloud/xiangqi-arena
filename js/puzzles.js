@@ -1,82 +1,116 @@
-// js/puzzles.js - 📅 每日殘局題庫(江湖殘局風)
+// js/puzzles.js - 📅 每日殘局題庫(N 手連將殺)
 //
-// 每天一題、全世界同一題:日期(台北時間 UTC+8 換日)→ FNV-1a → 題庫輪出。
-// 不用 Math.random ⇒ 任何裝置、任何時刻開,同一天必同一題(零後端)。
+// 每天一組、全世界同一組:日期(台北時間 UTC+8 換日)→ FNV-1a → 題庫輪出。
+// 不用 Math.random ⇒ 任何裝置、任何時刻開,同一天必同一組。
 //
-// ★ 題庫紀律(2026-08-31 立):
-//   ① 每一題都要過機器驗證(test/daily.mjs):紅方 AI(高級)對黑方 AI(高級)
-//      實打,紅方要在步數上限內贏——「解得動」不靠人看。
-//   ② 兩王不可同列空檔照面(這個引擎的飛將=王可直接飛吃,照面=一步被秒)。
-//   ③ 這些是「江湖殘局風」的原創擺題(紅先勝、少子、看得懂)。
-//      正宗古譜殘局(七星聚會、蚯蚓降龍那些)多為紅先和、解法幾十步,
-//      孩子玩不動、也**不可憑記憶亂擺冒名**——之後要收錄需逐題查證棋譜。
+// ★ 2026-09-04 全部換掉。舊題庫的問題(使用者原話「太簡單了,一點難度都沒有」):
+//   ① 16 題裡黑方**一顆攻擊子都沒有**(只有將+士+象)⇒ 完全沒有反擊,紅方怎麼走都會贏。
+//   ② hint 直接把解法寫在題目上(「兩支炮疊在一條線上,前炮就是後炮的炮架!」)。
+//   ③ 驗證條件只是「高級 AI 對打 120 步內贏 2/3 次」—— 那不叫難度,那叫「總會贏」。
+//
+// 現在:每一題都是**機器窮舉驗過的 N 手連將殺**
+//   ・紅方每一手都必須將軍,不管黑方怎麼應,N 手內將死
+//   ・黑方一定有反擊子(車/炮/馬),而且開局至少 6 步可應
+//   ・剛好 N 手 —— N-1 手殺不掉(所以標的步數是真的)
+//   ・hint 只說「幾手連將殺」這個規則,不說走哪一顆
+//
+// ★ 題庫不是手擺的,是 scripts 生成 + 求解器窮舉驗證。
+//   daily-puzzle-kit 的鐵則:每日題是機器生的 ⇒ 可解性也要機器驗。
+//   手擺棋局宣稱「這題三步殺」的直覺錯誤率,本輪實測就踩到:
+//   人工擺的 4 個「戰術題」只有 2 個真的有殺,還有 1 個是「輪紅走而黑方已被將」的違規局面。
 //
 // 棋盤座標:row 0-4=紅方(下)、row 5-9=黑方(上);紅兵往 row 增加的方向走。
 
 const DAILY_PUZZLES = [
-  { id: "double-rooks", name: "雙車錯", hint: "兩支車輪流將軍,把老將趕出九宮!",
-    red: [["king", 0, 3], ["rook", 7, 0], ["rook", 6, 8]],
-    black: [["king", 9, 4], ["advisor", 9, 3], ["advisor", 9, 5]] },
+  { id: "炮兵-2", name: "炮兵", mateIn: 2,
+    hint: "2 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 2, 4], ["cannon", 3, 8], ["pawn", 7, 5]],
+    black: [["king", 9, 5], ["rook", 1, 6], ["rook", 7, 2], ["cannon", 6, 0]] },
 
-  { id: "rook-knight", name: "車馬冷著", hint: "馬控將門,車來收官——別讓馬腳被絆住!",
-    red: [["king", 0, 3], ["rook", 6, 1], ["knight", 5, 4]],
-    black: [["king", 9, 4], ["advisor", 9, 5], ["elephant", 9, 6]] },
+  { id: "雙車馬-2", name: "雙車馬", mateIn: 2,
+    hint: "2 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 1, 5], ["knight", 9, 2], ["rook", 5, 1], ["rook", 5, 6]],
+    black: [["king", 7, 4], ["elephant", 5, 2], ["cannon", 6, 8], ["rook", 7, 7], ["cannon", 0, 3]] },
 
-  { id: "rook-cannon", name: "車炮逼宮", hint: "炮要隔一顆子才吃得到——找好炮架!",
-    red: [["king", 0, 3], ["rook", 5, 0], ["cannon", 5, 4], ["pawn", 6, 4]],
-    black: [["king", 9, 4], ["advisor", 9, 3], ["advisor", 8, 4]] },
+  { id: "雙車-3", name: "雙車", mateIn: 3,
+    hint: "3 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 2, 5], ["rook", 4, 1], ["rook", 9, 0]],
+    black: [["king", 9, 3], ["elephant", 9, 2], ["cannon", 5, 7], ["cannon", 3, 8], ["rook", 1, 6]] },
 
-  { id: "three-pawns", name: "三兵逼宮", hint: "過了河的兵能左右走——三兄弟一起擠進九宮!",
-    red: [["king", 0, 3], ["pawn", 7, 3], ["pawn", 7, 4], ["pawn", 7, 5], ["rook", 4, 8]],
-    black: [["king", 9, 4], ["advisor", 9, 3], ["advisor", 9, 5]] },
+  { id: "雙車馬-3", name: "雙車馬", mateIn: 3,
+    hint: "3 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 0, 4], ["rook", 4, 1], ["rook", 4, 7], ["knight", 6, 3]],
+    black: [["king", 9, 3], ["elephant", 5, 6], ["elephant", 9, 6], ["cannon", 7, 4], ["cannon", 2, 0]] },
 
-  { id: "double-cannons", name: "重炮連環", hint: "兩支炮疊在一條線上,前炮就是後炮的炮架!",
-    red: [["king", 0, 3], ["cannon", 5, 4], ["cannon", 3, 4], ["pawn", 6, 0]],
-    black: [["king", 9, 4], ["advisor", 9, 3], ["elephant", 9, 6]] },
+  { id: "雙馬-3", name: "雙馬", mateIn: 3,
+    hint: "3 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 0, 4], ["knight", 6, 6], ["knight", 8, 8]],
+    black: [["king", 9, 5], ["elephant", 9, 6], ["rook", 3, 1], ["rook", 5, 0]] },
 
-  { id: "rook-two-pawns", name: "車雙兵", hint: "兵開路、車包抄——小兵到了底線也能立大功!",
-    red: [["king", 0, 3], ["rook", 4, 4], ["pawn", 6, 2], ["pawn", 6, 6]],
-    black: [["king", 8, 4], ["advisor", 9, 3], ["advisor", 9, 5], ["elephant", 9, 2]] },
+  { id: "雙車-3-2", name: "雙車", mateIn: 3,
+    hint: "3 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 0, 4], ["rook", 3, 7], ["rook", 6, 7]],
+    black: [["king", 9, 5], ["elephant", 7, 8], ["cannon", 2, 5], ["rook", 8, 0]] },
 
-  { id: "knight-cannon", name: "馬炮爭先", hint: "馬跳將門、炮鎮中路——兩件武器輪流發難!",
-    red: [["king", 0, 3], ["knight", 6, 2], ["cannon", 4, 4], ["pawn", 6, 4]],
-    black: [["king", 9, 4], ["advisor", 9, 5], ["elephant", 5, 2]] },
+  { id: "車馬兵-3", name: "車馬兵", mateIn: 3,
+    hint: "3 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 2, 3], ["pawn", 6, 8], ["knight", 7, 2], ["rook", 6, 6]],
+    black: [["king", 7, 5], ["advisor", 9, 3], ["rook", 4, 7], ["rook", 0, 2]] },
 
-  { id: "lone-rook", name: "單車擒王", hint: "只有一支車也夠——先吃士,再把老將逼到角落!",
-    red: [["king", 0, 3], ["rook", 7, 7], ["pawn", 5, 3]],
-    black: [["king", 9, 4], ["advisor", 9, 3]] },
+  { id: "雙車馬-4", name: "雙車馬", mateIn: 4,
+    hint: "4 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 0, 4], ["rook", 8, 0], ["rook", 4, 8], ["knight", 7, 4]],
+    black: [["king", 7, 3], ["elephant", 7, 8], ["advisor", 9, 3], ["rook", 1, 2], ["rook", 6, 0], ["cannon", 4, 7]] },
 
-  { id: "deep-pawns", name: "老兵搜山", hint: "貼著底線的兵最兇——配合車把九宮拆了!",
-    red: [["king", 0, 3], ["pawn", 8, 3], ["pawn", 8, 5], ["rook", 5, 0]],
-    black: [["king", 9, 4], ["elephant", 9, 6], ["elephant", 5, 6]] },
+  { id: "車雙馬-4", name: "車雙馬", mateIn: 4,
+    hint: "4 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 0, 5], ["knight", 4, 2], ["knight", 6, 7], ["rook", 5, 2]],
+    black: [["king", 8, 4], ["knight", 3, 2], ["rook", 6, 1], ["rook", 2, 3]] },
 
-  { id: "cannon-pawn", name: "炮兵聯手", hint: "兵當炮架直轟中路——黑將躲哪裡都有下一發!",
-    red: [["king", 0, 3], ["cannon", 6, 4], ["pawn", 7, 4], ["pawn", 5, 7]],
-    black: [["king", 9, 4], ["advisor", 9, 3], ["advisor", 9, 5]] },
+  { id: "雙車-4", name: "雙車", mateIn: 4,
+    hint: "4 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 1, 5], ["rook", 5, 6], ["rook", 2, 8]],
+    black: [["king", 8, 3], ["elephant", 9, 6], ["cannon", 6, 2], ["rook", 2, 3], ["knight", 8, 1]] },
 
-  { id: "full-house", name: "車馬炮會師", hint: "三軍到齊!別急著吃子,先想哪一步是將軍。",
-    red: [["king", 0, 3], ["rook", 5, 1], ["knight", 4, 5], ["cannon", 3, 0]],
-    black: [["king", 9, 4], ["advisor", 9, 3], ["advisor", 9, 5], ["elephant", 9, 2], ["elephant", 9, 6]] },
+  { id: "雙車炮-4", name: "雙車炮", mateIn: 4,
+    hint: "4 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 1, 4], ["cannon", 3, 2], ["rook", 2, 6], ["rook", 3, 8]],
+    black: [["king", 9, 3], ["advisor", 7, 3], ["cannon", 1, 7], ["cannon", 6, 0], ["rook", 2, 2]] },
 
-  { id: "twin-knights", name: "雙馬飲泉", hint: "兩匹馬互相掩護往九宮跳——小心別絆到自己!",
-    red: [["king", 0, 3], ["knight", 6, 3], ["knight", 6, 5], ["pawn", 6, 7], ["rook", 3, 0]],
-    black: [["king", 9, 4], ["advisor", 8, 4], ["elephant", 9, 2]] },
+  { id: "雙車炮-4-2", name: "雙車炮", mateIn: 4,
+    hint: "4 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 0, 3], ["rook", 4, 6], ["cannon", 2, 8], ["rook", 5, 7]],
+    black: [["king", 7, 4], ["advisor", 9, 3], ["cannon", 6, 5], ["cannon", 2, 4], ["knight", 4, 4]] },
 
-  { id: "center-cannon", name: "中炮鎖喉", hint: "炮鎮中路釘住老將,車從旁邊繞進去!",
-    red: [["king", 0, 3], ["cannon", 4, 4], ["pawn", 6, 4], ["rook", 6, 8]],
-    black: [["king", 9, 4], ["advisor", 9, 3], ["advisor", 9, 5], ["elephant", 9, 6]] },
+  { id: "雙車-4-2", name: "雙車", mateIn: 4,
+    hint: "4 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 2, 5], ["rook", 2, 1], ["rook", 3, 7]],
+    black: [["king", 9, 3], ["elephant", 7, 4], ["elephant", 5, 6], ["rook", 0, 3], ["rook", 5, 0]] },
 
-  { id: "river-pawns", name: "過河卒建功", hint: "兩個過河兵一左一右,車在後面壓陣!",
-    red: [["king", 0, 4], ["pawn", 7, 2], ["pawn", 6, 4], ["rook", 3, 8]],
-    black: [["king", 9, 3], ["advisor", 8, 4], ["elephant", 7, 4]] },
+  { id: "雙車-5", name: "雙車", mateIn: 5,
+    hint: "5 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 1, 4], ["rook", 4, 8], ["rook", 7, 0]],
+    black: [["king", 9, 5], ["elephant", 9, 6], ["cannon", 2, 4], ["cannon", 0, 1]] },
 
-  { id: "moon-scoop", name: "海底撈月", hint: "車沉底線、炮從後面照——老將無處可逃!",
-    red: [["king", 0, 3], ["rook", 5, 5], ["cannon", 1, 4], ["pawn", 5, 2]],
-    black: [["king", 9, 4], ["advisor", 9, 5]] },
+  { id: "雙車-5-2", name: "雙車", mateIn: 5,
+    hint: "5 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 1, 3], ["rook", 7, 0], ["rook", 7, 8]],
+    black: [["king", 9, 4], ["rook", 8, 2], ["cannon", 4, 3]] },
 
-  { id: "armor-off", name: "霸王卸甲", hint: "先拆士象、再擒老將——一件一件來,不急。",
-    red: [["king", 1, 3], ["rook", 8, 0], ["cannon", 6, 6], ["pawn", 5, 4]],
-    black: [["king", 9, 4], ["advisor", 9, 3], ["advisor", 9, 5], ["elephant", 9, 6]] },
+  { id: "車馬兵-5", name: "車馬兵", mateIn: 5,
+    hint: "5 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 2, 5], ["pawn", 5, 3], ["knight", 5, 1], ["rook", 2, 2]],
+    black: [["king", 8, 4], ["cannon", 4, 0], ["rook", 6, 3]] },
+
+  { id: "雙車馬-5", name: "雙車馬", mateIn: 5,
+    hint: "5 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 2, 4], ["knight", 6, 3], ["rook", 6, 0], ["rook", 7, 6]],
+    black: [["king", 8, 3], ["elephant", 7, 4], ["rook", 4, 5], ["cannon", 8, 1]] },
+
+  { id: "車馬-5", name: "車馬", mateIn: 5,
+    hint: "5 手連將殺:每一手都要將軍,黑方怎麼應都躲不掉。",
+    red: [["king", 1, 4], ["knight", 7, 2], ["rook", 8, 1]],
+    black: [["king", 9, 5], ["elephant", 7, 8], ["knight", 4, 6], ["knight", 1, 7], ["rook", 6, 8]] },
 ];
 
 // 台北時間(UTC+8)的日期——「全世界同一題」需要一條固定的換日線(與 billiards3d 撞11 同式)

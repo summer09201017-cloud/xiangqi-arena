@@ -309,7 +309,7 @@ class ArenaApp {
                 }
             }
 
-            // ③ 搜出來的走法要過真正的規則(ai.js 的走法產生器是簡化版,不含長將)
+            // ③ 搜出來的走法要過真正的規則(ai.js 的走法產生器不含長將)
             if (move && !this.gameLogic.isAllowedMove(move.from.row, move.from.col, move.to.row, move.to.col)) {
                 move = this.fallbackMove(this.aiSide());
             }
@@ -341,7 +341,7 @@ class ArenaApp {
     }
 
     /* ═══ 💡 AI 提示(全艦隊棋類批次:借同一支引擎,從玩家這一邊算一手)═══
-       ① 給出去之前先過 isAllowedMove —— ai.js 的走法產生器是簡化版(不含長將、
+       ① 給出去之前先過 isAllowedMove —— ai.js 的走法產生器不含長將(
           自己註解也寫著不考慮將軍),不驗的話會提示一手玩家**點不動**的棋。
        ② 同一個局面按幾次都回同一手:calculateBestMove 內部有 moves.sort(random),
           不快取的話同分的兩手會輪流跳,看起來像跳針。
@@ -358,7 +358,7 @@ class ArenaApp {
         setTimeout(() => {
             let move = null;
             try {
-                move = this.ai.calculateBestMove(this.gameLogic.getBoardState(), this.playerSide(), 'hard');
+                move = this.ai.calculateBestMove(this.gameLogic.getBoardState(), this.playerSide(), 'hint');
                 if (move && !this.gameLogic.isAllowedMove(
                     move.from.row, move.from.col, move.to.row, move.to.col)) move = null;
             } catch (error) {

@@ -285,7 +285,21 @@ class GameLogic {
         // 不能吃自己的棋子
         if (targetPiece && targetPiece.color === piece.color) return false;
 
-        return PiecesRules.checkRules(this.board, fromRow, fromCol, toRow, toCol);
+        if (!PiecesRules.checkRules(this.board, fromRow, fromCol, toRow, toCol)) return false;
+
+        /* ★ 2026-09-04 補:不得自將。
+           走法規則(PiecesRules)只管「這顆棋子能不能這樣走」,不管「走完自己會不會被將」。
+           少了這一條,玩家可以把擋在中路的仕走開、讓對方的車直接照到自己的帥(飛將照面同理),
+           下一手就被吃掉——遊戲不會阻止,看起來像「我明明還能走,怎麼就輸了」。
+           isInCheck() 本來就寫好了,只是從來沒有人呼叫它(原註解:「為 Milestone 4 及 AI 預留」)。
+           ⚠ 直接動 this.board 再還原,不複製盤面:getLegalMovesForPiece 一次要問 90 格,
+              複製 90 次 10×9 陣列在手機上會頓。 */
+        this.board[toRow][toCol] = piece;
+        this.board[fromRow][fromCol] = null;
+        const selfCheck = this.isInCheck(piece.color);
+        this.board[fromRow][fromCol] = piece;
+        this.board[toRow][toCol] = targetPiece;
+        return !selfCheck;
     }
     
     // 檢查指定玩家是否被將軍 (為 Milestone 4 及 AI 預留)

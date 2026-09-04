@@ -1,6 +1,6 @@
 ============================================================
 3D 象棋對局場(xiangqi-arena)— 交接說明(讀我-HANDOFF.txt)
-更新:2026-09-03 凌晨(HFP 機・Fable 5.1)
+更新:2026-09-04(agape250 機・Opus 5)🧠 AI 引擎重寫 + 📅 題庫全換「N 手連將殺」+ 規則層補「不得自將」(SW xiangqi-3d-shell-v5,線上驗過)
 ============================================================
 
 ★ 這是什麼
@@ -10,6 +10,16 @@
   ★ 這站 0901 以前沒有源碼(0817 鏡像搬遷後正本失蹤),0902 使用者拍板重建 ⇒ 本 repo。詳見 README.md 第一段。
 
 ★ 現在到哪(2026-09-03)
+  ✅ 0904 這一輪(使用者:「AI 太笨了,常給一些沒用的提示」「每日殘局太簡單了,一點難度都沒有」):
+     ① gameLogic.isValidMove 補「不得自將」(isInCheck 早就寫好,從沒被呼叫)——連玩家都能走送將的棋
+     ② ai.js 重寫:合法走法/將軍/將死/困斃 + PST + MVV-LVA + alpha-beta + 靜態搜尋 + 迭代加深
+        (搜尋內部偽合法求速度,真正合法性只在根節點驗一次)
+     ③ 提示改用獨立 hint 檔(比高級深一層、無同分隨機 ⇒ 同局面同答案)
+     ④ 題庫 18 題全換成機器窮舉驗過的 N 手連將殺(2手×2 3手×5 4手×6 5手×5);黑方一律有反擊子
+     ⑤ test 第③節改窮舉驗證(保證,不是抽樣)。測試 251+45 / browser 40 全綠
+     量到:同檔位新舊對打 8 盤 新 6 : 舊 0.5
+     ⚠ 玩法有變:每日殘局從「打到贏」變成「N 手連將殺」,黑方會反擊,玩家真的可能輸
+     ⚠ 題庫是 scripts 生成 + 求解器驗的,不要手改題目座標(手擺的直覺錯誤率本輪實測就踩到)
   ✅ 已完成:
      v1 重建版(0902,828a06e / f1ab8e7):五種開局譜・盤面快照存讀檔・2D/3D 視角・長將規則・悔棋・
         💡 AI 提示・📅 每日殘局一組 5 題・統計打點・npm run stage 部署包
@@ -38,7 +48,7 @@
   部署(⚠ 兩步,而且 --branch main 不能省,否則只建 preview):
   npm run stage
   npx wrangler pages deploy .deploy --project-name incandescent-stroopwafel-31007a --branch main
-  改任何檔先 bump sw.js 的 CACHE_NAME(現在 xiangqi-3d-shell-v4);新增上線檔要補 scripts/stage.mjs SHIP + sw.js ASSETS_TO_CACHE。
+  改任何檔先 bump sw.js 的 CACHE_NAME(現在 xiangqi-3d-shell-v5);新增上線檔要補 scripts/stage.mjs SHIP + sw.js ASSETS_TO_CACHE。
   線上驗收看內容:
   curl -s "https://incandescent-stroopwafel-31007a.pages.dev/sw.js?bust=1" | grep "CACHE_NAME ="
 
