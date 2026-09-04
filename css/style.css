@@ -222,3 +222,15 @@ button.primary:hover:not(:disabled) { background: #85351f; border-color: #85351f
   .board-layout { grid-template-columns: minmax(0, 1fr); }
   .canvas-shell { max-height: 62vh; }
 }
+
+/* 🏷 改版簡歷摺疊(0904)——攤開放 hero 會把棋盤擠出第一屏,見 index.html 那段註解 */
+.ver-fold { margin: 8px 0 0; }
+.ver-fold > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-soft);
+  padding: 4px 2px;
+  list-style: revert;
+}
+.ver-fold > summary:hover { text-decoration: underline; }
+.ver-fold[open] > summary { margin-bottom: 2px; }
