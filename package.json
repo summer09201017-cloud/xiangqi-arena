@@ -4,7 +4,7 @@
   "private": true,
   "description": "3D 象棋對局場(重建版)—— Three.js xiangqi PWA",
   "scripts": {
-    "test": "node test/rules.mjs && node test/daily.mjs",
+    "test": "node test/rules.mjs && node test/daily.mjs && node test/vertag.mjs",
     "serve": "node scripts/serve.mjs",
     "check": "node scripts/browser-check.mjs",
     "stage": "node scripts/stage.mjs"

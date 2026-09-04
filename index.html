@@ -19,9 +19,15 @@
       <p class="eyebrow">Three.js Xiangqi PWA</p>
       <h1>3D 象棋對局場</h1>
       <p class="subtitle">點選棋子與交叉點即可走子;3D 視角可用滑鼠拖曳旋轉、雙指縮放。</p>
-      <!-- 🏷 版本簡歷(game-must-haves ⑦):寫清楚這一版做了什麼 + 前幾版一行 -->
+      <!-- 🏷 版本與改版簡歷(game-must-haves ⑦ 兩件套)
+           A. 版號 → 右下角徽章向「正在控制本頁的 SW」問 CACHE_NAME ⇒ 頁面不寫死、不會漂。
+           B. 簡歷 → 下面這行。★★ 這一行是**靜態的、會漂**:0904 實錘 —— 它停在 v2,
+              而站上其實已經是 v5,v3/v4/v5 三版全沒寫進來,還把版號少標了一號。
+              ⇒ 已加 test/vertag.mjs 守「這行的 vN 必須等於 sw.js 的 CACHE_NAME」,
+                忘了更新會當場紅。改版時**這一行要跟 sw.js 一起改**。
+           ★ 白話寫給家長與老師,不是 commit 訊息。 -->
       <p id="verTag" class="ver-tag">
-        v2 · ⛶ 全螢幕棋盤(棋盤放大到整個畫面)· v1 重建版(從此有源碼)· 📅 每日殘局一組 5 題 · 💡 AI 提示 · 五種開局譜 · 存讀檔 · 2D/3D
+        版本 v6(2026-09-04)・🏷 <b>看得到版本了</b>:畫面右下角會顯示這台裝置實際在跑的版本(10 秒後淡出,重整一次就再出現),下面這排也補齊了前幾版做過什麼——之前這排停在很早的版本,老師看不出站上更新過。<br>前幾版:v5 🧠 <b>電腦變強了</b>:重寫下棋的思考方式,會多算幾步、比較不會送死;<b>每日殘局</b>換成「限幾步之內將死對方」(全世界同一組,每天換);並補上規則——<b>不能走出讓自己被將的棋</b>。<br>前幾版:v4 修好<b>使用統計</b>(上線後那幾天其實一筆都沒收到,老師看不到有多少人在玩)。<br>前幾版:v3 ⛶ <b>棋盤可以放到滿螢幕</b>(使用者反映「下棋的畫面太小」,手機上尤其明顯)。<br>前幾版:v2 重建上線——這一版之後才有原始碼,在那之前只有線上那一份、改不動。
       </p>
     </header>
 
@@ -140,5 +146,44 @@
   <script src="js/ai.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/app.js"></script>
+  <div id="appVerBadge" style="position:fixed;right:6px;bottom:4px;font-size:11px;line-height:1;opacity:.55;z-index:2147483000;pointer-events:none;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);font-family:system-ui,sans-serif"></div>
+  <script>
+    /* 🏷️ appVerBadgeFade:徽章是 position:fixed 在右下角,會蓋住按鈕的字
+       (pointer-events:none 只讓點擊穿過去,字還是被蓋著)⇒ 10 秒後淡出。 */
+    ;(function () {
+      var b = document.getElementById('appVerBadge')
+      if (!b) return
+      b.style.transition = 'opacity .8s'
+      setTimeout(function () {
+        b.style.opacity = '0'
+        setTimeout(function () { b.style.display = 'none' }, 900)
+      }, 10000)
+    })()
+  </script>
+  <script>
+  /* 🏷️ 版號徽章(0820 全艦隊批次範本,整段照抄 athletics3d):
+     問「正在控制本頁的 SW」拿版本 = 你手上真的在跑的那一版,頁面不寫死任何版號(不會漂)。
+     硬重整(Ctrl+F5)的分頁不受 SW 管、問不到 → 誠實顯示退路,不要假裝知道。 */
+  (function () {
+    var el = document.getElementById('appVerBadge');
+    if (!el || !('serviceWorker' in navigator) || location.protocol !== 'https:') return;
+    var got = false;
+    navigator.serviceWorker.addEventListener('message', function (e) {
+      if (e.data && e.data.type === 'SW_VERSION') {
+        got = true;
+        var s = String(e.data.v), m = /-((?:v|nf)?\d+)$/.exec(s);
+        el.textContent = '🏷️ 版本 ' + (m ? m[1] : s) + '(這台裝置實際執行中的版本)';
+      }
+    });
+    function ask() { var c = navigator.serviceWorker.controller; if (c) c.postMessage('GET_VERSION'); }
+    navigator.serviceWorker.ready.then(ask).catch(function () {});
+    navigator.serviceWorker.addEventListener('controllerchange', ask);
+    setTimeout(function () {
+      if (got) return;
+      if (!navigator.serviceWorker.controller) el.textContent = '🏷️ 版本 —(強制重新整理的分頁問不到;普通重整一次即顯示)';
+      else { ask(); setTimeout(function () { if (!got) el.textContent = '🏷️ 版本 —(讀不到,重整一次即顯示)'; }, 1500); }
+    }, 1600);
+  })();
+  </script>
 </body>
 </html>

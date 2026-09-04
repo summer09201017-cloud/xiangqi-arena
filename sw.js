@@ -1,6 +1,6 @@
 // ★ 任何檔案有改就 bump CACHE_NAME(cache-first,不 bump 舊使用者永遠拿舊版)
 // 舊站(無源碼版)是 xiangqi-3d-shell-v1;這是重建版,接著往下編號。
-const CACHE_NAME = 'xiangqi-3d-shell-v5';
+const CACHE_NAME = 'xiangqi-3d-shell-v6';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -44,4 +44,9 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((hit) => hit || fetch(event.request)),
   );
+});
+
+// 🏷️ 版號回報（0820 全艤隊範本）：頁尾徽章問「實際執行中的版本」，答案 = 本 SW 的快取名。
+self.addEventListener('message', function (e) {
+  if (e && e.data === 'GET_VERSION' && e.source) e.source.postMessage({ type: 'SW_VERSION', v: CACHE_NAME });
 });
