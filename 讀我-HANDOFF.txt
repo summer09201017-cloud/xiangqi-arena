@@ -3,6 +3,16 @@
 更新:2026-09-04(agape250 機・Opus 5)🧠 AI 引擎重寫 + 📅 題庫全換「N 手連將殺」+ 規則層補「不得自將」(SW xiangqi-3d-shell-v5,線上驗過)
 ============================================================
 
+★★★★★ 2026-09-05(HFP 機・Fable 5.1・0904-fb)⛶ v8 全螢幕工具列補「重新開局 / 每日殘局 / 難度」+ 🔗 到單機版的路 ✅ 已上線(6ecccd5)★★★★★
+  由來:roadmap 待做第 2 條(使用者反映每次都要先離開全螢幕才能換設定)+ 十二站健檢(兩象棋站各 5 次/30 天,互導比改亂數網址便宜;改名撞 CF 凍結)。
+  做法:index.html fsToolbar 多 fsNewGameButton / fsDailyButton / fsDifficultySelect;js/app.js 全部「代按右側欄原鈕」(newGameButton.click / dailyButton.click;
+  難度 select 複製原 options、change 時回寫原 select 並 dispatch change;disabled/hidden 跟原鈕同步)⇒ 邏輯只有一份。css/style.css 補 .fs-toolbar select 兩條。
+  每日殘局鈕下加一條到 https://3d-xiangqi.pages.dev/(單機版每天一組 5 題)的連結。verTag v8 + v7 併入前幾版(test/vertag.mjs 9/9);sw v7→v8。
+  部署:npm run stage → `npx wrangler pages deploy .deploy --project-name incandescent-stroopwafel-31007a --branch main`;線上 sw v8、fsNewGameButton、連結、.git/HEAD 回 SPA fallback。
+  ⚠⚠ **dwell-beacon-guard 對本 repo 誤報**:它把 js/app.js:653 那行**註解**裡的「不是 /p、不是 s」當成真的打點網址,擋了部署;實際程式是 /api/ping 與 t=。
+     用 `DWELL_OK=1` 放行(認指令字串,加在 npm run stage / wrangler 前面)。守門要修成跳過註解——已記大表待使用者拍板。
+  ⚠ 線上 sw.js 用 `grep -o "xiangqi-3d-shell-v[0-9]*" | head -1` 會抓到註解裡的 v1,要用 `CACHE_NAME = '…'` 那個 pattern 才是真版號(0905 自己踩到一次)。
+
 ★ 這是什麼
   Three.js 中國象棋 PWA「對局場」。線上 https://incandescent-stroopwafel-31007a.pages.dev(網址是 Netlify 時代的亂數名,不改)
   GitHub summer09201017-cloud/xiangqi-arena(分支 master)。
