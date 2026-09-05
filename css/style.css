@@ -142,6 +142,7 @@ body {
 }
 .fs-toolbar { display: none; gap: 8px; flex-wrap: wrap; }
 .fs-toolbar button { min-height: 40px; padding: 6px 10px; }
+.fs-toolbar select { min-height: 40px; padding: 6px 8px; font: inherit; border-radius: 8px; }
 .button-row .span2 { grid-column: 1 / -1; }
 
 body.fs-active { overflow: hidden; }
@@ -160,6 +161,7 @@ body.fs-active { overflow: hidden; }
 .stage-panel.is-fs .fs-toolbar button { background: #2b1f17; color: #f6efe6; border-color: #5a4536; }
 .stage-panel.is-fs .fs-toolbar button.primary { background: var(--accent); border-color: var(--accent); }
 .stage-panel.is-fs .fs-toolbar button:disabled { opacity: 0.4; }
+.stage-panel.is-fs .fs-toolbar select { background: #2b1f17; color: #f6efe6; border: 1px solid #5a4536; }
 .stage-panel.is-fs .canvas-shell {
   flex: 1 1 auto; min-height: 0;
   height: auto; max-height: none;   /* 蓋掉平時的 clamp(...) 與窄螢幕的 62vh */

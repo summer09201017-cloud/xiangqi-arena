@@ -76,6 +76,7 @@ class ArenaApp {
             fsButton: $('fsButton'), fsButton2: $('fsButton2'), fsToolbar: $('fsToolbar'),
             fsHintButton: $('fsHintButton'), fsUndoButton: $('fsUndoButton'),
             fsCameraButton: $('fsCameraButton'), fsExitButton: $('fsExitButton'),
+            fsNewGameButton: $('fsNewGameButton'), fsDailyButton: $('fsDailyButton'), fsDifficultySelect: $('fsDifficultySelect'),
             stagePanel: document.querySelector('.stage-panel'),
         };
     }
@@ -139,6 +140,17 @@ class ArenaApp {
         el.fsHintButton.addEventListener('click', () => el.hintButton.click());
         el.fsUndoButton.addEventListener('click', () => el.undoButton.click());
         el.fsCameraButton.addEventListener('click', () => el.cameraButton.click());
+        // 0905 v8:全螢幕裡也能重新開局 / 進每日殘局 / 換難度(使用者反映每次都得先離開全螢幕才能換設定)。
+        //   一律「代按右側欄的原鈕」,不另寫一套流程 —— 邏輯只有一份,全螢幕只是另一個入口。
+        el.fsNewGameButton.addEventListener('click', () => el.newGameButton.click());
+        el.fsDailyButton.addEventListener('click', () => el.dailyButton.click());
+        el.fsDifficultySelect.innerHTML = el.difficultySelect.innerHTML;
+        el.fsDifficultySelect.value = el.difficultySelect.value;
+        el.fsDifficultySelect.addEventListener('change', () => {
+            el.difficultySelect.value = el.fsDifficultySelect.value;
+            el.difficultySelect.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        el.difficultySelect.addEventListener('change', () => { el.fsDifficultySelect.value = el.difficultySelect.value; });
         document.addEventListener('fullscreenchange', () => this.applyFullscreenClass());
         document.addEventListener('webkitfullscreenchange', () => this.applyFullscreenClass());
         document.addEventListener('keydown', (event) => {
@@ -611,6 +623,8 @@ class ArenaApp {
         // ⛶ 全螢幕工具列跟側欄同步(它們只是轉呼叫側欄的鈕)
         el.fsUndoButton.disabled = el.undoButton.disabled;
         el.fsHintButton.disabled = el.hintButton.disabled;
+        el.fsDailyButton.disabled = el.dailyButton.disabled;
+        el.fsDailyButton.classList.toggle('hidden', el.dailyButton.classList.contains('hidden'));
 
         const rotatable = this.viewMode === '2d';
         el.rotateLeftButton.disabled = !rotatable;

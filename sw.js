@@ -1,6 +1,6 @@
 // ★ 任何檔案有改就 bump CACHE_NAME(cache-first,不 bump 舊使用者永遠拿舊版)
 // 舊站(無源碼版)是 xiangqi-3d-shell-v1;這是重建版,接著往下編號。
-const CACHE_NAME = 'xiangqi-3d-shell-v7';
+const CACHE_NAME = 'xiangqi-3d-shell-v8';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
