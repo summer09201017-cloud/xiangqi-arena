@@ -35,7 +35,11 @@ class ChessAI {
             easy:   { depth: 2, ms: 150,  blunder: 0.25, slack: 90, tieRandom: true  },
             medium: { depth: 4, ms: 450,  blunder: 0,    slack: 0,  tieRandom: true  },
             hard:   { depth: 6, ms: 1100, blunder: 0,    slack: 0,  tieRandom: true  },
-            hint:   { depth: 7, ms: 1400, blunder: 0,    slack: 0,  tieRandom: false },
+            /* tradeMargin(2026-09-07 使用者拍板,四站統一):提示不建議「白做工的交換」——
+               吃子要比最好的安靜手多賺半個卒(50)才推薦,否則寧可建議走位。走 _hintRoot 那條路。
+               ★ 只有提示有這條;AI 對手三檔照最強下法,該換就換,棋力不受影響。
+               ★ 缺點誠實寫下來:少數「換掉對方關鍵防守子」的等價交換也會被跳過,提示因此偏保守。 */
+            hint:   { depth: 7, ms: 1400, blunder: 0,    slack: 0,  tieRandom: false, tradeMargin: 50 },
         };
 
         // 位置價值表(紅方視角,row 0=紅底線)。黑方用 pst[9-row][col] 鏡射。
@@ -251,6 +255,171 @@ class ChessAI {
         return moves;
     }
 
+    /* ══════════ 💡 提示的「子力關」(2026-09-07)══════════
+       整體評估含 PST 位置分,一筆「子力打平、位置好看一點」的交換有可能靠位置分越過門檻。
+       但使用者要的規矩很白話:**吃完被吃回、子力沒賺,就不要叫我吃**。
+       所以提示另外用一份純子力的交換試算把關(不含 PST),兩關都過才推薦。 */
+
+    /** 純子力(不含位置分),紅方為正 */
+    _materialOnly(board) {
+        let score = 0;
+        for (let r = 0; r < 10; r++) {
+            for (let c = 0; c < 9; c++) {
+                const p = board[r][c];
+                if (!p) continue;
+                const v = this.PIECE_VALUES[p.type] || 0;
+                score += p.color === 'red' ? v : -v;
+            }
+        }
+        return score;
+    }
+
+    /** 只走吃子、只看子力,算到沒人想再吃(negamax:回傳值是 color 的視角) */
+    _materialQuiescence(board, alpha, beta, color, qdepth) {
+        const sign = color === 'red' ? 1 : -1;
+        let best = sign * this._materialOnly(board);
+        if (qdepth <= 0) return best;
+        if (best >= beta) return best;
+        if (best > alpha) alpha = best;
+
+        const enemy = color === 'red' ? 'black' : 'red';
+        const all = this.getPseudoMoves(board, color);
+        const caps = [];
+        for (let i = 0; i < all.length; i++) {
+            const victim = board[all[i].to.row][all[i].to.col];
+            if (!victim) continue;
+            if (victim.type === 'king') return this.MATE;   // 吃到王=贏,不必再算
+            caps.push(all[i]);
+        }
+        if (caps.length === 0) return best;
+        this._orderMoves(board, caps, 0);
+
+        for (let i = 0; i < caps.length; i++) {
+            const m = caps[i];
+            const cap = this.makeSimulatedMove(board, m);
+            const sc = -this._materialQuiescence(board, -beta, -alpha, enemy, qdepth - 1);
+            this.undoSimulatedMove(board, m, cap);
+            if (sc > best) best = sc;
+            if (best > alpha) alpha = best;
+            if (alpha >= beta) break;
+        }
+        return best;
+    }
+
+    /** 走了這一手吃子之後,把交換算到底,對走棋方的淨子力(>0 賺、=0 等價、<0 虧) */
+    _captureGain(board, move, color) {
+        const victim = board[move.to.row][move.to.col];
+        if (victim && victim.type === 'king') return Infinity;   // 吃王=直接贏,一定要推薦
+        const sign = color === 'red' ? 1 : -1;
+        const before = sign * this._materialOnly(board);
+        const enemy = color === 'red' ? 'black' : 'red';
+        const cap = this.makeSimulatedMove(board, move);
+        const after = -this._materialQuiescence(board, -Infinity, Infinity, enemy, 6);
+        this.undoSimulatedMove(board, move, cap);
+        return after - before;
+    }
+
+    /* ══════════ 💡 提示專用的根層:兩段式(2026-09-07)══════════
+       ★★ 為什麼不能沿用 calculateBestMove 的 scored 去比門檻(踩過一次,記下來):
+          迭代加深的根層是 rising-alpha,窗是 (-Infinity, -alpha) ——
+          **只有「有把 alpha 抬高」的那一手拿到精確分**,其餘全是「上界」(≥ 真值)。
+          而 _orderMoves 把吃子排最前面 ⇒ 吃子先搜、先當冠軍,後面的安靜手拿到的是
+          「貼著 alpha 的上界」⇒ 用它當門檻基準,門檻永遠比冠軍還高,任何吃子都過不了關。
+          症狀:每一局都印「吃子 N 手裡 0 手值得推薦」,連白吃一支車都被擋掉。
+       ⇒ 正解:**安靜手先搜**(rising alpha ⇒ 最好的安靜手是精確值),
+          再用「安靜手 + 門檻」當吃子的起始 alpha ⇒ 能勝出的吃子也是精確值。
+          每一手仍然只搜一次,成本和原本的根層一樣。 */
+    _hintRoot(board, color, lv, moves) {
+        const enemy = color === 'red' ? 'black' : 'red';
+        const isCap = (m) => !!board[m.to.row][m.to.col];
+
+        let quiet = [];
+        const capsAll = [];
+        for (let i = 0; i < moves.length; i++) {
+            if (isCap(moves[i])) capsAll.push(moves[i]); else quiet.push(moves[i]);
+        }
+        let noisy = capsAll.slice();
+        // 只剩吃子可走時,門檻沒有意義 —— 全部都當候選,不然沒棋可推薦
+        if (quiet.length === 0) { quiet = capsAll.slice(); noisy = []; }
+        this._orderMoves(board, noisy, 0);
+
+        /* 子力關「按需計算」:_materialQuiescence 是全盤走法產生 × qdepth,不便宜。
+           ★ 第一版在搜尋前先把每個吃子都算一遍 ⇒ 1400ms 預算被它吃光,
+             迭代加深只跑得到 depth 1(log 印 "depth 1/7, 161 nodes" 就是這個症狀)。
+           現在改成:只有當一手吃子的**分數已經越過門檻**、真的要被推薦時,才驗它的子力。
+           典型只會呼叫 0~2 次。沒過關的不採用,也**不抬 alpha**(否則會擋掉後面合格的吃子)。 */
+        const gainCache = new Map();
+        const materialOk = (m) => {
+            const key = m.from.row + ',' + m.from.col + '>' + m.to.row + ',' + m.to.col;
+            if (!gainCache.has(key)) gainCache.set(key, this._captureGain(board, m, color) > 0);
+            return gainCache.get(key);
+        };
+
+        let bestQuiet = quiet[0] || null;
+        let bestNoisy = null;
+        let completed = 0;
+
+        for (let d = 1; d <= lv.depth; d++) {
+            const savedDeadline = this._deadline;
+            if (d === 1) this._deadline = Infinity;   // 第 1 層一定跑完,否則會從一堆 -Infinity 裡亂挑
+            let aborted = false;
+
+            // ── 第一段:安靜手(rising alpha ⇒ 冠軍是精確值)──
+            let alpha = -Infinity;
+            let roundBest = null;
+            const round = [];
+            for (let i = 0; i < quiet.length; i++) {
+                const m = quiet[i];
+                const cap = this.makeSimulatedMove(board, m);
+                const sc = this.search(board, d - 1, -Infinity, -alpha, enemy, 1);
+                this.undoSimulatedMove(board, m, cap);
+                if (sc === null) { aborted = true; break; }
+                const val = -sc;
+                round.push({ move: m, score: val });
+                if (val > alpha) { alpha = val; roundBest = m; }
+            }
+
+            // ── 第二段:吃子,起始 alpha = 最好的安靜手 + 門檻 ──
+            let noisyBest = null;
+            let noisyScore = -Infinity;
+            if (!aborted) {
+                let nAlpha = quiet.length ? alpha + lv.tradeMargin : -Infinity;
+                for (let i = 0; i < noisy.length; i++) {
+                    const m = noisy[i];
+                    const cap = this.makeSimulatedMove(board, m);
+                    const sc = this.search(board, d - 1, -Infinity, -nAlpha, enemy, 1);
+                    this.undoSimulatedMove(board, m, cap);
+                    if (sc === null) { aborted = true; break; }
+                    const val = -sc;
+                    if (val > nAlpha && materialOk(m)) { nAlpha = val; noisyBest = m; noisyScore = val; }
+                }
+            }
+
+            this._deadline = savedDeadline;
+            if (aborted) break;                       // 這一層不完整,沿用上一層的結論
+
+            if (roundBest) bestQuiet = roundBest;
+            bestNoisy = noisyBest;                    // 只認這一層的結論(上一層的可能已被更深的推翻)
+            completed = d;
+            round.sort(function (a, b) { return b.score - a.score; });
+            quiet = round.map(function (e) { return e.move; });   // 好手先搜,下一層剪得更兇
+            /* 算到殺棋就不用再深了。★ 一定要先檢查是不是有限數:
+               沒有吃子過門檻時 noisyScore 還是 -Infinity,而 Math.abs(-Infinity) > MATE 恆真
+               ⇒ 每一局都在第 1 層就收工,提示等於只看一步(2026-09-07 實際踩到,
+               log 印出一排 "depth 1/7, 100 nodes" 才發現)。 */
+            const mateFound = (Number.isFinite(alpha) && Math.abs(alpha) > this.MATE - 200)
+                || (Number.isFinite(noisyScore) && Math.abs(noisyScore) > this.MATE - 200);
+            if (mateFound) break;
+        }
+
+        if (typeof console !== 'undefined' && console.log) {
+            console.log('AI hint: depth ' + completed + '/' + lv.depth + ', ' + this._nodes
+                + ' nodes;吃子 ' + capsAll.length + ' 手,驗過子力 ' + gainCache.size
+                + ' 手,推薦吃子 ' + (bestNoisy ? '是' : '否'));
+        }
+        return bestNoisy || bestQuiet || moves[0];
+    }
+
     /** 靜態搜尋:只把「還有子可吃」的變化走完,免得剛好在吃子的半路上收工(水平線效應)。 */
     quiescence(board, alpha, beta, color, qdepth) {
         this._nodes++;
@@ -361,6 +530,9 @@ class ChessAI {
         this._nodes = 0;
         this._deadline = Date.now() + lv.ms;
         const enemy = color === 'red' ? 'black' : 'red';
+
+        // 💡 提示走兩段式根層(不建議白做工的交換);AI 對手照舊走下面那條
+        if (lv.tradeMargin) return this._hintRoot(board, color, lv, moves);
 
         let scored = moves.map(function (m) { return { move: m, score: -Infinity }; });
         let completed = 0;
