@@ -49,6 +49,8 @@ class ChessRenderer {
             pieceRing: '#cfc7b5',  // 頂面那兩圈:柔和的灰 ★ 本站自有,參考站的字是 3D Text、沒有圈
             redInk: '#e63946',     // 紅方的字(Piece.jsx)
             blackInk: '#1d3557',   // 黑方的字:深藍(Piece.jsx)—— 不是黑
+            selFace: 0xf4a261,     // 🟠 被選中/被提示那顆的頂面(Piece.jsx selectedColor)
+            selRim: 0x2e7d32,      // 🟠 被選中那顆的綠邊轉深綠(Piece.jsx)
         };
 
         // 常數設定
@@ -333,6 +335,9 @@ class ChessRenderer {
     }
     
     updateBoardState(board) {
+        /* ⚠ 這裡會把所有棋子 mesh 丟掉重建 ⇒ 先放掉「哪一顆被染橘」的記錄,
+           不然 _selected 會指向一個已經 dispose 的 mesh(還原時寫到廢材質上,靜靜沒事但是錯的)。 */
+        this.clearSelectedPiece();
         // 清除舊的棋子 meshes
         for (const key in this.pieceMeshes) {
             this.scene.remove(this.pieceMeshes[key]);
@@ -405,8 +410,41 @@ class ChessRenderer {
         }
     }
     
+    /* 🟠 被選中 / 被提示的那顆棋子本身變橘色(2026-09-09 使用者拍板:
+         「按下提示,被提示的棋子會變成橘色,這個很好,要學起來」)。
+       學自 3d-chinese-chess(`src/components/Piece.jsx`):頂面 #f4a261、綠邊轉深綠 #2e7d32。
+       ★ 為什麼有效:綠圈只是「加一個記號在旁邊」,棋子本身沒變 ⇒ 盤面越滿越難一眼找到;
+         把那一顆整個換色是「改變主體」,在 32 顆白棋裡一眼就跳出來。綠圈綠點照舊保留
+         (它們指的是「要走到哪」,和「是哪一顆」是兩件事)。
+       ★ 實作用材質的 `color` 去乘貼圖,不重畫貼圖:頂面貼圖是象牙白底(接近白)⇒
+         乘上橘色就變橘底,而字的紅/深藍還在(乘完仍看得出來)。成本是兩行,不用重建 texture。
+       ⚠ 一定要記住「原本是什麼顏色」再還原,不可以還原成寫死的常數 ——
+         哪天 PALETTE 改了,寫死的那份會把棋子還原成舊色,而且不會有任何紅燈。 */
+    setSelectedPiece(row, col) {
+        this.clearSelectedPiece();
+        const mesh = this.pieceMeshes[`${row},${col}`];
+        if (!mesh || !Array.isArray(mesh.material)) return;
+        const face = mesh.material[1], rim = mesh.material[0];
+        this._selected = {
+            mesh,
+            faceColor: face.color.getHex(),
+            rimColor: rim.color.getHex(),
+        };
+        face.color.setHex(this.PALETTE.selFace);
+        rim.color.setHex(this.PALETTE.selRim);
+    }
+
+    clearSelectedPiece() {
+        const s = this._selected;
+        if (!s) return;
+        this._selected = null;
+        if (!s.mesh || !Array.isArray(s.mesh.material)) return;
+        s.mesh.material[1].color.setHex(s.faceColor);
+        s.mesh.material[0].color.setHex(s.rimColor);
+    }
     highlightSquare(row, col) {
         this.clearHighlights();
+        this.setSelectedPiece(row, col);   // 🟠 那一顆本身也變橘(見上面註解)
         
         const pos = this.getGridPosition(row, col);
         const geo = new THREE.RingGeometry(this.PIECE_RADIUS + 0.5, this.PIECE_RADIUS + 1.7, 32);
@@ -450,6 +488,7 @@ class ChessRenderer {
     }
     
     clearHighlights() {
+        this.clearSelectedPiece();   // ⚠ 一起還原,否則選過的棋子會一直橘著
         this.highlightMeshes.forEach(mesh => {
             this.scene.remove(mesh);
             mesh.geometry.dispose();
