@@ -16,25 +16,39 @@ class ChessRenderer {
         
         this.onPieceClick = null; // 回呼函數
 
-        /* 🎨 配色(2026-09-09 使用者指定:「3chinese.netlify.app 的綠底棋子與米白底棋盤
-             做得很漂亮,請參考」)。3chinese 是本站 v1 之前那個**沒有原始碼**的舊站,
-             現在已經是 Netlify 404(站沒了)⇒ 唯一依據是使用者存下來的兩張手機截圖,
-             這幾個值就是從截圖取的 —— 它們是「規格」本身,不要憑印象改;要改先看截圖。
-           ★ 兩個 3D 象棋站(本站 + 3D-Xiangqi 單機版)這一份要**一模一樣**,看起來才是一家的。
+        /* 🎨 配色來源(2026-09-09,**已更正**):使用者指定「3chinese.netlify.app 的綠底棋子與
+             米白底棋盤做得很漂亮,請參考」。
+           ★★ 我一開始判錯,記下來免得下一手再錯:我看它的工具列(難度/開局譜/2D/存檔讀檔/安裝/
+              重置視角)和本站幾乎一樣,就推論「它是本站 v1 之前那個沒有原始碼的前身」——**錯的**。
+              使用者反問「為何之後要改配色?我認為不是前身」,查下去才對:
+              它是**第三個**中國象棋站 `3d-chinese-chess`(React + Vite,**有完整原始碼**),
+              還活著,線上三個網址:3dchinese / 3d-chinese-chess / 3dchinesechess .pages.dev。
+              `3chinese.netlify.app` 只是它搬到 CF Pages 之前的舊 Netlify 網址(現在 404)。
+              ⇒ 所以配色**不必**靠截圖目測,直接抄它的原始碼精確值(下面這幾個就是):
+                `src/components/Piece.jsx`(棋子面/綠邊/紅字/黑字)、`src/components/Board.jsx`
+                (盤面 #ebc38a、格線 #594433)、`src/App.jsx`(背景 #2c3e50)。
+              第一版我目測的值(bg 0x2f4050 / boardTop 0xece0c0 / gridLine 0x5b3a1a /
+              pieceSide 0x3fa84c / face #f8f5ee / red #d81f26 / black #1b2a5e)都很接近但不精確,
+              已全部換成上面那份原始碼的值。boardSide 是唯一「推」出來的:參考站的盤是平面、沒有側面色。
+           ★ 參考站的「選中/被提示的棋子」是**橘色** `#f4a261` 頂面 + 深綠 `#2e7d32` 邊。
+             本站不抄那一套:本站的提示是綠圈 + 綠點(不動棋子本身的顏色),兩者不要混。
            改之前(整片偏黃褐、和背景糊在一起):棋盤 0xd2b48c、格線 0x000000、
-             棋子頂 #f0d9b5 + 棕圈、棋子側 0xe0c090、紅字 #ff0000、黑字 #000000、背景 0x333333。
-           ★ 💡 提示的綠圈綠點刻意**不動**(還是亮萊姆綠 0x00ff00):
-             實機截圖比對過,亮萊姆綠壓在中綠色的棋子邊上依然分得出來。 */
+             棋子頂 #f0d9b5 + 棕圈、棋子側 0xe0c090、紅字 #ff0000、黑字 #000000、背景 0x333333。 */
         this.PALETTE = {
-            bg: 0x2f4050,          // 深板岩藍
-            boardTop: 0xece0c0,    // 米白棋盤面
-            boardSide: 0xdcc9a0,   // 棋盤側面(厚度)略深,看得出是一塊板
-            gridLine: 0x5b3a1a,    // 深咖啡格線(不是黑)
-            pieceSide: 0x3fa84c,   // ★ 綠色棋子側面 = 使用者說的「綠底棋子」
-            pieceFace: '#f8f5ee',  // 棋子頂面:象牙白
-            pieceRing: '#cfc7b5',  // 頂面那兩圈:柔和的灰
-            redInk: '#d81f26',     // 紅方的字
-            blackInk: '#1b2a5e',   // 黑方的字:**深藍**,不是黑
+            bg: 0x2c3e50,          // 背景:深板岩藍(App.jsx 的 <color background>)
+            /* 盤面/盤側 ⚠ **刻意不用參考站的十六進位值**(它是 0xebc38a)。
+               同一個色碼在不同的材質與燈光下**不是同一個顏色**:參考站是 R3F 的
+               meshStandardMaterial + roughness 0.8,本站是 MeshPhongMaterial + 環境光 0.6
+               + 平行光 0.8 ⇒ 照抄 0xebc38a 渲出來明顯偏黃(實機截圖比對過),
+               反而比目測值離參考站的觀感**更遠**。⇒ 這兩個值以「看起來像不像截圖」為準,不是以色碼為準。 */
+            boardTop: 0xece0c0,    // 盤面:米白(對齊截圖觀感,不是對齊色碼)
+            boardSide: 0xdcc9a0,   // 盤側(厚度)比盤面深一階(參考站是平面盤,沒有側面色)
+            gridLine: 0x594433,    // 格線:深咖啡(Board.jsx lineColor)—— 不是黑
+            pieceSide: 0x4caf50,   // ★ 棋子綠邊 = 使用者說的「綠底棋子」(Piece.jsx 下半圓柱)
+            pieceFace: '#fdfaf6',  // 棋子頂面:象牙白(Piece.jsx 上半圓柱)
+            pieceRing: '#cfc7b5',  // 頂面那兩圈:柔和的灰 ★ 本站自有,參考站的字是 3D Text、沒有圈
+            redInk: '#e63946',     // 紅方的字(Piece.jsx)
+            blackInk: '#1d3557',   // 黑方的字:深藍(Piece.jsx)—— 不是黑
         };
 
         // 常數設定
