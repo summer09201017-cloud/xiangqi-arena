@@ -2,7 +2,13 @@
 
 ★ **先讀 `README.md`**(這個 repo 為什麼存在、功能、部署雷、11 個踩過的坑)。這份只放 AI 接手要守的鐵則與現況。
 
-## 現況(**2026-09-04,agape250 機**)
+## 現況(**2026-09-07,HFP 機**)
+
+- 🎯 **💡 提示加「多賺半個卒才建議吃子」門檻(0907)**:四站統一的規矩(西洋棋 ×2、中國象棋、暗棋);
+  `LEVELS.hint.tradeMargin = 50`、`_hintRoot()` 兩段式根層、`_captureGain()` 純子力交換試算。AI 對手三檔不受影響。
+  引擎與姊妹站 `3D-Xiangqi` 的 `js/ai.js` **逐字相同**(改一邊要同步另一邊)。
+  ★ 同一輪順手修好「提示每局只搜到 depth 1」的真 bug(「算到殺棋就收工」漏了有限數檢查)⇒ 現在穩定 depth 4~6。
+  測試:`npm test` = rules 45/0 + daily 251/0 + vertag 9/9 + hint 6/0。
 
 - 🧠 **AI 引擎重寫 + 📅 題庫全換「N 手連將殺」+ 規則層補「不得自將」(0904)**。細節見 `roadmap.md` 已完成段與 `js/ai.js` 檔頭註解。
   ⚠ 題庫由 scripts 生成 + 求解器窮舉驗證,**不要手改題目座標**;改了必跑 `npm test`。
@@ -11,8 +17,8 @@
 - ✅ v1 重建版(0901~0902,`828a06e` / `f1ab8e7`):開局譜 / 盤面快照存讀檔 / 2D-3D / 長將 / 悔棋 / 💡 提示 /
   📅 每日殘局 5 題 / 統計打點 / `npm run stage` 乾淨部署包。
 - ✅ v2 ⛶ 全螢幕棋盤(0902,`f06ddac`):使用者「要能全螢幕,因下棋的畫面太小」。
-- 線上 https://incandescent-stroopwafel-31007a.pages.dev = 最新(SW `xiangqi-3d-shell-v5`)。
-- 測試:`npm test` 45+251/0;`npm run check` 40/0(本機與線上都跑過)。
+- 線上 https://incandescent-stroopwafel-31007a.pages.dev = 最新(**SW `xiangqi-3d-shell-v9`、verTag v9**)。
+- 測試:`npm test` = **rules 45/0 + daily 251/0 + vertag 9/9 + hint 6/0**;`npm run check` 40/0(本機與線上都跑過)。
 - 待做見 `roadmap.md`;給另一台機的在 `讀我-HANDOFF.txt`。
 
 ## 一檔一責

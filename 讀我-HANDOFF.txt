@@ -1,7 +1,28 @@
 ============================================================
 3D 象棋對局場(xiangqi-arena)— 交接說明(讀我-HANDOFF.txt)
-更新:2026-09-04(agape250 機・Opus 5)🧠 AI 引擎重寫 + 📅 題庫全換「N 手連將殺」+ 規則層補「不得自將」(SW xiangqi-3d-shell-v5,線上驗過)
+更新:2026-09-07(HFP 機・Opus 5)🎯 💡 提示加「多賺半個卒才建議吃子」門檻 + 修好「提示只搜第 1 層」的 bug
+      (SW xiangqi-3d-shell-v9、verTag v9,線上驗過)
 ============================================================
+
+★★★★★ 2026-09-07(HFP 機・Opus 5・session 0906-3D西洋棋棋字名)🎯 提示加「多賺半個卒才建議吃子」門檻 + 修好提示只搜第 1 層的 bug ✅ 已上線(aa3951e)★★★★★
+  由來:使用者在 3D 幻影西洋棋退件「提示叫我吃、吃完又被別的子吃回,等於交換被吃」⇒ 全棋類提示體檢。
+       本站兩條經典病因 0904 就修掉了(PST + quiescence)⇒ 這輪只補第三條、四站統一的規矩。
+  改動(js/ai.js;兩象棋站逐字相同):
+    · LEVELS.hint 加 tradeMargin: 50(半個卒);AI 對手三檔沒有這條,該換就換。
+    · _materialOnly / _materialQuiescence / _captureGain:純子力(不含 PST)把交換算到底。
+    · _hintRoot():提示專用兩段式根層 —— 安靜手先搜(rising alpha ⇒ 冠軍是精確值),
+      再用「安靜手 + 門檻」當吃子的起始 alpha;吃子還要過子力關才採用。
+  ★★ 順手抓到的真 bug(比門檻本身更有價值):「算到殺棋就收工」漏了有限數檢查,
+     沒有吃子過門檻時 noisyScore 還是 -Infinity,Math.abs(-Infinity) > MATE 恆真
+     ⇒ **提示每一局只搜到 depth 1**。修好後穩定 depth 4~6。
+  ★ 三個實作坑(都寫進 ai.js 註解):①不能沿用 calculateBestMove 的 scored 比門檻(迭代加深只有冠軍精確,
+     其餘是上界 ⇒ 門檻永遠高於冠軍,任何吃子都過不了關)②子力關要按需算(第一版把 1400ms 預算吃光)
+     ③出題:兩王不可同線(飛將)、黑方不可光桿王(車帥必殺蓋過吃子)。
+  測試:新增 test/hint.mjs 6/0;rules 45/0、daily 251/0、vertag 9/9、hint 6/0;線上 npm run check 40/0。
+  部署:npm run stage → npx wrangler pages deploy .deploy --project-name incandescent-stroopwafel-31007a --branch main;線上驗過 sw v9 + tradeMargin/_hintRoot 都在。
+  git 實況(交接前真的問過 git):status --short 空、HEAD aa3951e(本輪最後一顆)、rev-list @{u}..HEAD = 0。
+  🟡 本輪之後別場 session 又推了「🏷 版本與改版簡歷改成可收合(全艦隊 0907 批次)」與其 CSS 修正
+     ⇒ 現在 SW xiangqi-3d-shell-v9、verTag v9(本站這輪之後別場沒再推)。那不是本輪的改動,但本機 clone 已含它。
 
 ★★★★★ 2026-09-05(HFP 機・Fable 5.1・0904-fb)⛶ v8 全螢幕工具列補「重新開局 / 每日殘局 / 難度」+ 🔗 到單機版的路 ✅ 已上線(6ecccd5)★★★★★
   由來:roadmap 待做第 2 條(使用者反映每次都要先離開全螢幕才能換設定)+ 十二站健檢(兩象棋站各 5 次/30 天,互導比改亂數網址便宜;改名撞 CF 凍結)。
