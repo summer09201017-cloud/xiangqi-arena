@@ -144,6 +144,80 @@ await page.waitForTimeout(600);
 await page.setViewportSize({ width: 1366, height: 900 });
 await page.waitForTimeout(600);
 
+/* ── 🖐 手機轉棋盤的靈敏度(2026-09-09 使用者實機退件)──
+   原話:「手機版棋盤旋轉與移動太靈敏、太快了」。
+   量的是使用者真的感覺到的那個數字:**一根手指劃 150px,鏡頭轉幾度**。
+   OrbitControls:2π × 拖曳像素 ÷ 容器高 × rotateSpeed ⇒ 速度 1.0 在 390×844 上是 64°/150px。
+   ★ 一定要另開一個 hasTouch 的 context:`pointer: coarse` 是**裝置能力**,
+     `setViewportSize` 改不了它 ⇒ 在原本這個 page 上量,量到的永遠是滑鼠那一檔。
+   ★ 用 TouchEvent 手刻:three r128 的 OrbitControls 觸控走 touchstart/touchmove/touchend
+     (pointerdown 那條分支裡的 touch 是 `// TODO touch`,根本沒接)⇒ 派 pointer 事件量不到東西。 */
+const touchCtx = await browser.newContext({
+  viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
+});
+const tp = await touchCtx.newPage();
+await tp.goto(URL + "/?v=" + Date.now(), { waitUntil: "domcontentloaded" });
+await tp.waitForTimeout(2500);
+await tp.locator("#fsButton").click();
+await tp.waitForTimeout(1200);
+const swipe = await tp.evaluate(async () => {
+  const r = window.app.renderer;
+  const el = r.renderer.domElement;
+  const box = el.getBoundingClientRect();
+  const y = Math.round(box.top + box.height / 2);
+  const x0 = Math.round(box.left + box.width * 0.25);
+  const deg = (rad) => (rad * 180) / Math.PI;
+  const fire = (type, cx) => {
+    /* ⚠ 一定要給 pageX/pageY:OrbitControls 的觸控分支讀的是 `event.touches[0].pageX`
+       (r128 第 570/625 行),只給 clientX 的話它讀到 0 ⇒ 位移永遠是 0、量出「轉 0°」
+       看起來像功能壞了(0909 我第一版就這樣假紅了一輪)。 */
+    const t = new Touch({
+      identifier: 1, target: el,
+      clientX: cx, clientY: y, pageX: cx, pageY: y, screenX: cx, screenY: y,
+    });
+    el.dispatchEvent(new TouchEvent(type, {
+      touches: type === "touchend" ? [] : [t],
+      targetTouches: type === "touchend" ? [] : [t],
+      changedTouches: [t], bubbles: true, cancelable: true,
+    }));
+  };
+  const before = r.controls.getAzimuthalAngle();
+  /* 俯角要在**拖曳之前**量:這支的公轉軸是 Y,水平拖曳會同時改到俯角
+     ⇒ 拖完再量會拿到 49° 而不是預設的 56°(0909 踩過)。 */
+  const p0 = r.camera.position.clone();
+  const elevation = Math.round(deg(Math.atan2(p0.z, Math.hypot(p0.x, p0.y))));
+  fire("touchstart", x0);
+  for (let i = 1; i <= 15; i++) fire("touchmove", x0 + i * 10);   // 共 150px
+  fire("touchend", x0 + 150);
+  /* ⚠ 要等阻尼跑完才量:enableDamping 時每一次 update 只吃掉 dampingFactor(0.05)那一份,
+     剩下的靠 animate 的 rAF 迴圈慢慢收 ⇒ 立刻量會拿到「還在半路上」的角度
+     (0909 我第一版量到 9°,以為是設定太小,其實是量太早)。 */
+  await new Promise((res) => setTimeout(res, 1400));
+  const after = r.controls.getAzimuthalAngle();
+  let d = Math.abs(deg(after - before)) % 360;
+  if (d > 180) d = 360 - d;
+  /* 俯角要從**相機座標**自己算,不要用 controls.getPolarAngle():
+     這支的 OrbitControls 公轉軸是 Y(quat 在建構時照當時的 camera.up=(0,1,0) 算好就凍住,
+     之後才把 camera.up 改成 (0,0,1))⇒ getPolarAngle 是從 +Y 量的,拿來當俯角會得到 -34°。 */
+  return {
+    rotateSpeed: r.controls.rotateSpeed, panSpeed: r.controls.panSpeed,
+    canvasH: Math.round(box.height), degPer150px: Math.round(d),
+    coarse: matchMedia("(pointer: coarse)").matches,
+    elevation,          // 拖曳前量的(見上面那段註解)
+  };
+});
+ok(swipe.coarse, "觸控 context 真的是 pointer: coarse(不然量到的是滑鼠那一檔)", JSON.stringify(swipe));
+ok(swipe.rotateSpeed <= 0.5,
+  `★★ 手機的 rotateSpeed 有調降:${swipe.rotateSpeed}(退件時是預設 1.0)`, JSON.stringify(swipe));
+ok(swipe.degPer150px >= 12 && swipe.degPer150px <= 35,
+  `★★ 一根手指劃 150px ⇒ 鏡頭轉 ${swipe.degPer150px}°(退件時 ~64°;太小會變成拖不動)`,
+  JSON.stringify(swipe));
+ok(swipe.elevation >= 52 && swipe.elevation <= 60,
+  `★ 直向的預設俯角 = ${swipe.elevation}°(和桌機同一個)`
+  + " —— 0908 那版壓到 74°,量出來棋盤寬 354→327,棋子反而小 8%(那版簡歷說錯了)",
+  JSON.stringify(swipe));
+await touchCtx.close();
+
 /* ★★ 棋子上的字方向 —— 這是一個**只有放大看才看得出來**的缺陷:
    圓柱頂面 UV 配上 rotateX(π/2) 之後字是轉 90° 的,而象棋有一半的字(車/士/兵/王)
    接近對稱,轉了也看不太出來 ⇒ 掃一眼會放它過關。

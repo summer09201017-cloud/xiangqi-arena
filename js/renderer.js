@@ -15,7 +15,28 @@ class ChessRenderer {
         this.mouse = new THREE.Vector2();
         
         this.onPieceClick = null; // 回呼函數
-        
+
+        /* 🎨 配色(2026-09-09 使用者指定:「3chinese.netlify.app 的綠底棋子與米白底棋盤
+             做得很漂亮,請參考」)。3chinese 是本站 v1 之前那個**沒有原始碼**的舊站,
+             現在已經是 Netlify 404(站沒了)⇒ 唯一依據是使用者存下來的兩張手機截圖,
+             這幾個值就是從截圖取的 —— 它們是「規格」本身,不要憑印象改;要改先看截圖。
+           ★ 兩個 3D 象棋站(本站 + 3D-Xiangqi 單機版)這一份要**一模一樣**,看起來才是一家的。
+           改之前(整片偏黃褐、和背景糊在一起):棋盤 0xd2b48c、格線 0x000000、
+             棋子頂 #f0d9b5 + 棕圈、棋子側 0xe0c090、紅字 #ff0000、黑字 #000000、背景 0x333333。
+           ★ 💡 提示的綠圈綠點刻意**不動**(還是亮萊姆綠 0x00ff00):
+             實機截圖比對過,亮萊姆綠壓在中綠色的棋子邊上依然分得出來。 */
+        this.PALETTE = {
+            bg: 0x2f4050,          // 深板岩藍
+            boardTop: 0xece0c0,    // 米白棋盤面
+            boardSide: 0xdcc9a0,   // 棋盤側面(厚度)略深,看得出是一塊板
+            gridLine: 0x5b3a1a,    // 深咖啡格線(不是黑)
+            pieceSide: 0x3fa84c,   // ★ 綠色棋子側面 = 使用者說的「綠底棋子」
+            pieceFace: '#f8f5ee',  // 棋子頂面:象牙白
+            pieceRing: '#cfc7b5',  // 頂面那兩圈:柔和的灰
+            redInk: '#d81f26',     // 紅方的字
+            blackInk: '#1b2a5e',   // 黑方的字:**深藍**,不是黑
+        };
+
         // 常數設定
         this.SQUARE_SIZE_X = 10;
         this.SQUARE_SIZE_Y = 8.5; // 讓棋盤長度(Y軸)短一點，符合視覺比例
@@ -50,7 +71,7 @@ class ChessRenderer {
     initScene(initialBoardState) {
         // 1. Scene
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x333333);
+        this.scene.background = new THREE.Color(this.PALETTE.bg);
         
         /* 2. Camera
            ⚠⚠ 尺寸一律看**容器**,不是 window ——
@@ -73,6 +94,21 @@ class ChessRenderer {
         this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
+        /* 🖐 觸控裝置把靈敏度降下來(2026-09-09 使用者實機退件:
+             「手機版棋盤旋轉與移動太靈敏、太快了」)。
+           OrbitControls 的旋轉量 = 2π × 拖曳像素 ÷ **容器高** × rotateSpeed(兩軸都除容器高,
+           見 OrbitControls 的 `// yes, height`)⇒ 速度 1.0 時,直向手機 390×844 上
+           一根手指劃 150px 就轉 **64°**,手指一滑棋盤就飛走。
+           ⇒ 觸控 0.4(同樣 150px ≈ 26°)、平移 0.5。
+           ★ 滑鼠不動(維持 1.0):桌機是「按著拖曳看」而不是「滑過去」,而且有滑鼠的精度;
+             把桌機一起調慢會變成要拖很多下才轉得動。
+           ★ 這個病**不是** 0908 的全螢幕造成的:全螢幕之後容器**變高**(668 → 844),
+             而旋轉量是除以容器高 ⇒ 每像素其實比以前**不敏感**。
+             是預設值 1.0 從 0902 建站就一直太快,使用者現在真的在手機上玩全螢幕了才踩到。 */
+        const coarsePointer = typeof window.matchMedia === 'function'
+            && window.matchMedia('(pointer: coarse)').matches;
+        this.controls.rotateSpeed = coarsePointer ? 0.4 : 1.0;
+        this.controls.panSpeed = coarsePointer ? 0.5 : 1.0;
         // 允許玩家水平 360 度任意旋轉觀看棋盤
         this.controls.minAzimuthAngle = -Infinity;
         this.controls.maxAzimuthAngle = Infinity;
@@ -104,7 +140,13 @@ class ChessRenderer {
     createBoard() {
         // 棋盤本體 (木頭顏色)
         const boardGeo = new THREE.BoxGeometry(this.BOARD_WIDTH, this.BOARD_HEIGHT, this.BOARD_THICKNESS);
-        const boardMat = new THREE.MeshPhongMaterial({ color: 0xd2b48c }); // 木頭色
+        /* BoxGeometry 的材質順序 [+X,-X,+Y,-Y,+Z,-Z];這塊板的厚度在 Z ⇒ index 4 是棋盤面 */
+        const sideMat = new THREE.MeshPhongMaterial({ color: this.PALETTE.boardSide });
+        const boardMat = [
+            sideMat, sideMat, sideMat, sideMat,
+            new THREE.MeshPhongMaterial({ color: this.PALETTE.boardTop }),   // +Z = 棋盤面
+            sideMat,
+        ];
         this.boardMesh = new THREE.Mesh(boardGeo, boardMat);
         this.boardMesh.receiveShadow = true;
         // 把棋盤表面放在 z=0 平面
@@ -112,7 +154,7 @@ class ChessRenderer {
         this.scene.add(this.boardMesh);
         
         // 繪製棋盤線條 (簡單的線段)
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const lineMaterial = new THREE.LineBasicMaterial({ color: this.PALETTE.gridLine });
         const startX = -this.BOARD_WIDTH / 2 + this.SQUARE_SIZE_X / 2;
         const startY = -this.BOARD_HEIGHT / 2 + this.SQUARE_SIZE_Y / 2;
         
@@ -212,11 +254,11 @@ class ChessRenderer {
         const ctx = canvas.getContext('2d');
         
         // 背景
-        ctx.fillStyle = '#f0d9b5';
+        ctx.fillStyle = this.PALETTE.pieceFace;
         ctx.beginPath();
         ctx.arc(64, 64, 60, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = '#8b5a2b';
+        ctx.strokeStyle = this.PALETTE.pieceRing;
         ctx.lineWidth = 4;
         ctx.stroke();
 
@@ -227,7 +269,7 @@ class ChessRenderer {
         ctx.stroke();
         
         // 文字
-        ctx.fillStyle = isRed ? '#ff0000' : '#000000';
+        ctx.fillStyle = isRed ? this.PALETTE.redInk : this.PALETTE.blackInk;
         ctx.font = 'bold 60px "楷体", "KaiTi", serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -260,10 +302,11 @@ class ChessRenderer {
         const texture = this.createPieceTexture(piece.name, piece.color === 'red');
         
         // 材質陣列：側面使用木頭色，頂面使用帶有文字的紋理
+        const greenRim = new THREE.MeshPhongMaterial({ color: this.PALETTE.pieceSide });
         const materials = [
-            new THREE.MeshPhongMaterial({ color: 0xe0c090 }), // 側面
-            new THREE.MeshPhongMaterial({ map: texture }),     // 頂面
-            new THREE.MeshPhongMaterial({ color: 0xe0c090 })  // 底面
+            greenRim,                                       // 側面 = 綠(使用者指定的「綠底棋子」)
+            new THREE.MeshPhongMaterial({ map: texture }),  // 頂面 = 象牙白 + 字
+            greenRim                                        // 底面
         ];
         
         const mesh = new THREE.Mesh(geometry, materials);
@@ -462,20 +505,30 @@ class ChessRenderer {
             /* 斜看時棋盤的投影比正上方**矮**(前後被壓縮),所以不必退太遠;
                1.06 是量出來的:再小四個角會出框(browser-check 那條會紅)。 */
             dist *= 1.06;
-            /* ⛶ 2026-09-08:直向手機進全螢幕之後畫布變成 390×844 這種瘦高型,
-               相機是照「寬」裝下棋盤的(瘦高畫布一定是寬先滿),而斜看又把投影壓扁
-               ⇒ 棋盤只用掉約 36% 的高度,上下各一大片深色空白,棋子還是小的。
-               ⇒ 畫布越瘦高,就把相機壓得越接近正上方:投影跟著變高,同一個寬度下棋子更大。
-                 aspect ≥ 0.8(桌機、手機橫向)tall=0,觀感完全照舊,不動既有畫面。
-               ★ 寬度不受俯角影響,所以四個角照樣在框內(browser-check 的直向那條在守)。 */
-            const tall = Math.min(1, Math.max(0, (0.8 - aspect) / 0.4));
-            this.camera.position.set(0, -dist * (0.52 - 0.30 * tall), dist * (0.78 + 0.18 * tall));
+            /* ★★ 2026-09-09 **回退** 0908 那個「直向把相機壓向正上方」的改動,理由是量出來的:
+               390×844 直向全螢幕,投影四角的包圍盒 ——
+                 俯角 56°(這一行)→ 棋盤 **354**×260     俯角 74°(0908 那版)→ 棋盤 327×288
+               ⇒ 高 +28px、寬 **−27px**,面積只多 2%。而棋子大小是看**寬**的
+                 (九條直線分寬度:354/9 = 39px vs 327/9 = 36px)⇒ 0908 那版的棋子其實**小了 8%**,
+                 和它自己的改版簡歷寫的「棋子更大」剛好相反(已在 v11 的簡歷更正)。
+               ⇒ 俯角一律 56°(和桌機同一個,0902 以來就是這個值)。
+               ⚠ 這一條**不是** 0909「旋轉太靈敏」的病因 —— 那個病因是 rotateSpeed 預設 1.0
+                 (見上面 controls 那段)。我一度以為是「相機貼著極點」,量完才知道
+                 這支的公轉軸是 Y 不是 Z,0908 那版離公轉極點反而更遠。兩件事要分開講。 */
+            this.camera.position.set(0, -dist * 0.52, dist * 0.78);
             this.camera.up.set(0, 0, 1);
         }
         this.camera.lookAt(0, 0, 0);
         if (this.controls) {
             this.controls.target.set(0, 0, 0);
             this.controls.enableRotate = this.viewMode === '3d';   // 2D 不給轉,否則兩套控制打架
+            /* ⚠ 別在這裡加 min/maxPolarAngle 的「避開正上方極點」保護(0909 試過又拿掉):
+               OrbitControls 的 quat 是**建構時**照 `object.up` 算一次就凍住的
+               (r128 的 update 是 IIFE,quat 在 return function 之前算),
+               而這裡的相機是**先建 camera(up 還是預設 0,1,0)、後才把 up 設成 (0,0,1)**
+               ⇒ 它的公轉軸其實是 **Y**、不是 Z。所以 `getPolarAngle()` 是從 +Y 量的,
+                 minPolarAngle 擋的不是「正上方」而是「黑方那一側的水平方向」——
+                 加了會擋錯地方,而註解還會騙下一手。要真的修得先統一 up,那是另一件事。 */
             this.controls.update();
         }
     }
