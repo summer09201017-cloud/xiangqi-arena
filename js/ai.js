@@ -39,7 +39,15 @@ class ChessAI {
                吃子要比最好的安靜手多賺半個卒(50)才推薦,否則寧可建議走位。走 _hintRoot 那條路。
                ★ 只有提示有這條;AI 對手三檔照最強下法,該換就換,棋力不受影響。
                ★ 缺點誠實寫下來:少數「換掉對方關鍵防守子」的等價交換也會被跳過,提示因此偏保守。 */
-            hint:   { depth: 7, ms: 1400, blunder: 0,    slack: 0,  tieRandom: false, tradeMargin: 50 },
+            /* minDepth(2026-09-08 使用者實機退件「照提示走結果車被將吃了」):
+               ★ 迭代加深「時間到就交出上一層」在**慢的裝置上會直接退化成 1 層**——
+                 而 1 層 + quiescence 在時間也到了的時候連吃子鏈都不算(見 quiescence 的
+                 _outOfTime 那一行)⇒ 水平線效應整個回來,提示就把子送到對方嘴邊。
+                 實測:同一題同一手,桌機 1400ms 搜到 depth 5、手機那個速度只到 depth 1~2,
+                 提示品質**跟著裝置速度變**,這種東西不能靠時間預算保證。
+               ⇒ minDepth 這幾層無論多慢都要跑完(關掉時間閘),再往上才吃預算。
+                 提示是使用者按一下才算一次,多等半秒可以接受;AI 對手不受這條影響。 */
+            hint:   { depth: 7, ms: 1400, blunder: 0,    slack: 0,  tieRandom: false, tradeMargin: 50, minDepth: 3 },
         };
 
         // 位置價值表(紅方視角,row 0=紅底線)。黑方用 pst[9-row][col] 鏡射。
@@ -358,10 +366,12 @@ class ChessAI {
         let bestQuiet = quiet[0] || null;
         let bestNoisy = null;
         let completed = 0;
+        let lastRound = [];        // 最後一層算完的安靜手排名(掉子關要拿它挑替代手)
+        let sawMate = false;       // 這一手是殺棋 ⇒ 掉子關要放行(棄子殺是好棋)
 
         for (let d = 1; d <= lv.depth; d++) {
             const savedDeadline = this._deadline;
-            if (d === 1) this._deadline = Infinity;   // 第 1 層一定跑完,否則會從一堆 -Infinity 裡亂挑
+            if (d <= (lv.minDepth || 1)) this._deadline = Infinity;   // 這幾層一定跑完(第 1 層不跑完會從一堆 -Infinity 裡亂挑;minDepth 見 LEVELS.hint)
             let aborted = false;
 
             // ── 第一段:安靜手(rising alpha ⇒ 冠軍是精確值)──
@@ -401,6 +411,7 @@ class ChessAI {
             if (roundBest) bestQuiet = roundBest;
             bestNoisy = noisyBest;                    // 只認這一層的結論(上一層的可能已被更深的推翻)
             completed = d;
+            lastRound = round.slice();
             round.sort(function (a, b) { return b.score - a.score; });
             quiet = round.map(function (e) { return e.move; });   // 好手先搜,下一層剪得更兇
             /* 算到殺棋就不用再深了。★ 一定要先檢查是不是有限數:
@@ -409,15 +420,168 @@ class ChessAI {
                log 印出一排 "depth 1/7, 100 nodes" 才發現)。 */
             const mateFound = (Number.isFinite(alpha) && Math.abs(alpha) > this.MATE - 200)
                 || (Number.isFinite(noisyScore) && Math.abs(noisyScore) > this.MATE - 200);
-            if (mateFound) break;
+            if (mateFound) { sawMate = true; break; }
+        }
+
+        let pick = bestNoisy || bestQuiet || moves[0];
+
+        /* 🛡 掉子關(2026-09-08 使用者實機退件:「我按照 AI 提示去走,結果車被將吃了」)——
+           交出去之前,用**純子力**(不含 PST 位置分)把這一手之後的吃子鏈算到底:
+           會白丟半個卒以上的手,換成「分數次好、但不掉子」的那一手。
+           ★ 為什麼位置分擋不住:一手把車送到對方將嘴邊,PST 可能因為「車進到對方陣地」
+             給了正分;quiescence 本來要看穿它,但它在時間到的時候會退回靜態評估
+             ⇒ 慢的裝置上就漏過去了。這一關只看子力、不吃時間閘,所以不會跟著裝置變。
+           ★ 殺棋放行:棄子連殺是好棋,sawMate 的時候不擋。
+           ★ 成本:_captureGain 是純子力 quiescence,只在「真的要交出去」時呼叫,最多 8 次。 */
+        let rescued = null;
+        if (pick && !sawMate) {
+            const safe = (m) => this._captureGain(board, m, color) > -50;
+            if (!safe(pick)) {
+                const ranked = lastRound.slice().sort((a, b) => b.score - a.score);
+                let tried = 0;
+                for (let i = 0; i < ranked.length && tried < 8; i++) {
+                    const m = ranked[i].move;
+                    if (m === pick) continue;
+                    tried++;
+                    if (safe(m)) { rescued = m; break; }
+                }
+                if (rescued) pick = rescued;
+            }
         }
 
         if (typeof console !== 'undefined' && console.log) {
             console.log('AI hint: depth ' + completed + '/' + lv.depth + ', ' + this._nodes
                 + ' nodes;吃子 ' + capsAll.length + ' 手,驗過子力 ' + gainCache.size
-                + ' 手,推薦吃子 ' + (bestNoisy ? '是' : '否'));
+                + ' 手,推薦吃子 ' + (bestNoisy ? '是' : '否')
+                + (rescued ? ';🛡 掉子關換手' : ''));
         }
-        return bestNoisy || bestQuiet || moves[0];
+        return pick;
+    }
+
+    /* ══════════ 💡 提示②:必勝殺法搜尋(2026-09-08)══════════
+       ★★ 為什麼一定要有這一段 —— 使用者 0908 實機退件:每日殘局「車馬兵」(3 手殺)
+          照著提示走,走到第 7 手還在走,而且把車送去被將吃掉。
+          病根不是「搜得不夠深」,是**提示不知道自己在解殘局**:
+          殘局的勝利條件是「將死對方」,提示借的卻是對局引擎(子力 + PST 位置分),
+          於是它在殘局裡追求「位置好看」——實測有一題的提示讓車在 (8,7)/(9,7) 之間
+          來回跳針 15 手都不收(而正解是 4 手殺)。
+       ⇒ 提示先問「有沒有算得完的必勝殺法」,有就走它、並且把「幾手殺」講出來;
+         沒有才退回位置引擎,而且文案要誠實說「算不出必勝」。
+       兩段式,便宜的先跑:
+       ① 連將殺(每一手都將軍):分支極小,題庫的題本來就是這一型。
+       ② 一般必勝殺(不強制將軍):給「已經走偏、連將殺不存在了」的局面用,只搜很淺。 */
+
+    /** 攻方 color 要在 n 手內贏(將死或困斃)。allChecks=true 時每一手都必須將軍。
+        回傳第一手,或 null。roots 可指定根層只考慮哪些手(UI 擋掉的長將不要推薦)。 */
+    _mateAttack(board, color, n, allChecks, roots) {
+        if (n <= 0 || this._outOfTime()) return null;
+        const enemy = color === 'red' ? 'black' : 'red';
+        const moves = roots || this.getAllLegalMoves(board, color);
+        this._orderMoves(board, moves, 0);
+        for (let i = 0; i < moves.length; i++) {
+            if (this._outOfTime()) return null;
+            const m = moves[i];
+            const cap = this.makeSimulatedMove(board, m);
+            let ok = false;
+            /* 連將殺:這一手沒將軍就不算(題庫的題是這樣生的,而且分支小得多)。
+               ⚠ 順序很重要 —— 先看有沒有將軍,再看對手有沒有棋:
+                 不將軍卻讓對手無棋可走是「困斃」,象棋算贏,但那不是連將殺。 */
+            if (allChecks && !this.isInCheck(board, enemy)) ok = false;
+            else if (this.getAllLegalMoves(board, enemy).length === 0) ok = true;
+            else if (n > 1) ok = this._mateDefend(board, enemy, n - 1, allChecks);
+            this.undoSimulatedMove(board, m, cap);
+            if (ok) return m;
+        }
+        return null;
+    }
+
+    /** 守方 color 走一手;攻方是否**不管他怎麼應**都能在 n 手內贏。 */
+    _mateDefend(board, color, n, allChecks) {
+        if (this._outOfTime()) return false;
+        const enemy = color === 'red' ? 'black' : 'red';
+        const moves = this.getAllLegalMoves(board, color);
+        if (moves.length === 0) return true;                  // 已經沒棋可走 ⇒ 攻方贏了
+        for (let i = 0; i < moves.length; i++) {
+            const m = moves[i];
+            const cap = this.makeSimulatedMove(board, m);
+            const stillWins = this._mateAttack(board, enemy, n, allChecks) !== null;
+            this.undoSimulatedMove(board, m, cap);
+            if (!stillWins) return false;                     // 有一招逃得掉 ⇒ 不是必勝
+        }
+        return true;
+    }
+
+    /** 迭代加深找**最短**必勝殺法。回傳 { move, mateIn, allChecks } 或 null。
+        ⚠ 時間到就回 null —— 「算不出來」不等於「沒有殺法」,文案不可以混講。 */
+    findForcedMate(board, color, opts) {
+        const o = opts || {};
+        const saved = this._deadline;
+        this._deadline = Date.now() + (o.ms || 900);
+        const roots = o.moves || this.getAllLegalMoves(board, color);
+        let found = null;
+        const maxN = Math.max(o.maxChecks || 0, o.maxAny || 0);
+        for (let nn = 1; nn <= maxN && !found; nn++) {
+            if (nn <= (o.maxChecks || 0)) {
+                const m = this._mateAttack(board, color, nn, true, roots.slice());
+                if (m) { found = { move: m, mateIn: nn, allChecks: true }; break; }
+            }
+            if (nn <= (o.maxAny || 0)) {
+                const m = this._mateAttack(board, color, nn, false, roots.slice());
+                if (m) { found = { move: m, mateIn: nn, allChecks: false }; break; }
+            }
+            if (this._outOfTime()) break;
+        }
+        this._deadline = saved;
+        return found;
+    }
+
+    /* 💡 提示的對外入口(2026-09-08 起 app 一律走這裡,不要直接叫 calculateBestMove)。
+       opts:
+         puzzle      殘局模式 ⇒ 殺法搜得更深(殘局的勝利條件就是將死)
+         rootFilter  (move)=>bool,由 app 傳進來的「UI 真的允許這一手嗎」
+                     (長將被擋的棋提示出來,使用者會點不動、以為遊戲壞了)
+       回傳 { move, kind, mateIn }:
+         kind='mate' 找到必勝殺法(mateIn 手內)
+         kind='best' 沒有算得完的殺法,這是位置引擎的最好一手(已過掉子關)
+         kind='none' 沒有合法著法 */
+    hintMove(board, color, opts) {
+        const o = opts || {};
+        let moves = this.getAllLegalMoves(board, color);
+        if (typeof o.rootFilter === 'function') moves = moves.filter((m) => o.rootFilter(m));
+        if (moves.length === 0) return { move: null, kind: 'none' };
+
+        this._killers = [];
+        this._nodes = 0;
+        this._deadline = Infinity;
+
+        if (moves.length === 1) return { move: moves[0], kind: 'best' };
+
+        const mate = this.findForcedMate(board, color, {
+            ms: o.puzzle ? 1500 : 450,
+            maxChecks: o.puzzle ? 4 : 3,
+            maxAny: o.puzzle ? 2 : 0,
+            moves,
+        });
+        if (mate) {
+            /* 🪧 sacrifice:這一手之後這顆會被吃掉。殺法裡棄子是常事(車換將位),
+               但**一定要講**——使用者 0908 的原話就是「我按照 AI 提示去走,結果車被將吃了」:
+               他不是不能接受棄子,他是不知道那是故意的。不講就等於提示在騙他。 */
+            const sacrifice = this._captureGain(board, mate.move, color) <= -100;
+            if (typeof console !== 'undefined' && console.log) {
+                console.log('AI hint: 必勝殺法 ' + mate.mateIn + ' 手'
+                    + (mate.allChecks ? '(連將殺)' : '(不必每手將軍)')
+                    + (sacrifice ? ';這一手是棄子' : ''));
+            }
+            return {
+                move: mate.move, kind: 'mate', mateIn: mate.mateIn,
+                allChecks: mate.allChecks, sacrifice,
+            };
+        }
+
+        const lv = this.LEVELS.hint;
+        this._deadline = Date.now() + lv.ms;
+        const move = this._hintRoot(board, color, lv, moves);
+        return { move: move || moves[0], kind: 'best' };
     }
 
     /** 靜態搜尋:只把「還有子可吃」的變化走完,免得剛好在吃子的半路上收工(水平線效應)。 */

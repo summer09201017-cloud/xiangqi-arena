@@ -104,6 +104,46 @@ const fsAfter = await fsState();
 ok(!fsAfter.isFs && Math.abs(fsAfter.h - fit.h) < 4,
   "離開全螢幕:版面與畫布尺寸回到原樣", `${Math.round(fsAfter.h)} vs ${Math.round(fit.h)}`);
 
+/* ── ⛶ 直向手機的全螢幕(2026-09-08 使用者實機退件)──
+   原話:「手機上的全螢幕,不是真的全螢幕,還能看到一半的選單」。
+   ★ 為什麼上面那幾條抓不到:browser-check 跑的是 1366×900 的**寬扁**視窗,
+     工具列一行就排完;直向 390×844 那七顆會折成三行,加上狀態列與提示行,
+     選單吃掉快一半的螢幕高 —— 只有直向量得出來。
+   ⇒ 這一段固定用 iPhone 直向尺寸,守三件事:
+     ① 畫布高度 ≈ 視窗高度(棋盤真的吃滿,選單是浮層、不佔高度)
+     ② 選單浮層 ≤ 視窗高的 25%
+     ③ 棋盤四角仍在畫布內(直向是「寬先滿」,和寬扁那條是不同的分支) */
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(600);
+await page.locator("#fsButton").click();
+await page.waitForTimeout(1200);
+const port = await page.evaluate(() => {
+  const panel = document.querySelector(".stage-panel");
+  const c = document.querySelector("#game-container canvas").getBoundingClientRect();
+  const tb = document.getElementById("fsToolbar").getBoundingClientRect();
+  return {
+    isFs: panel.classList.contains("is-fs"),
+    cw: Math.round(c.width), ch: Math.round(c.height),
+    vw: innerWidth, vh: innerHeight,
+    tbH: Math.round(tb.height),
+    tipShown: getComputedStyle(document.getElementById("tipText")).display !== "none",
+  };
+});
+ok(port.isFs, "直向也進得了全螢幕");
+ok(port.ch >= port.vh * 0.94 && port.cw >= port.vw * 0.94,
+  `★★ 直向全螢幕:棋盤畫布吃滿整個視窗 ${port.cw}×${port.ch}(視窗 ${port.vw}×${port.vh})`,
+  JSON.stringify(port));
+ok(port.tbH <= port.vh * 0.25,
+  `★★ 直向全螢幕:選單浮層只佔 ${port.tbH}px = 視窗高的 ${Math.round((port.tbH / port.vh) * 100)}%(退件時是快一半)`,
+  JSON.stringify(port));
+ok(!port.tipShown, "直向全螢幕把「先點你的棋子」那行收掉(浮層上重複、又擠棋盤)");
+const fit3 = await measureFit();
+ok(fit3.inside, "★ 直向全螢幕(瘦高畫布)下棋盤四角仍在畫布內", fit3.corners.join(" / "));
+await page.locator("#fsExitButton").click();
+await page.waitForTimeout(600);
+await page.setViewportSize({ width: 1366, height: 900 });
+await page.waitForTimeout(600);
+
 /* ★★ 棋子上的字方向 —— 這是一個**只有放大看才看得出來**的缺陷:
    圓柱頂面 UV 配上 rotateX(π/2) 之後字是轉 90° 的,而象棋有一半的字(車/士/兵/王)
    接近對稱,轉了也看不太出來 ⇒ 掃一眼會放它過關。

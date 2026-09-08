@@ -368,18 +368,26 @@ class ArenaApp {
 
         this.say('💡 想一手…');
         setTimeout(() => {
-            let move = null;
+            let res = null;
             try {
-                move = this.ai.calculateBestMove(this.gameLogic.getBoardState(), this.playerSide(), 'hint');
-                if (move && !this.gameLogic.isAllowedMove(
-                    move.from.row, move.from.col, move.to.row, move.to.col)) move = null;
+                /* 0908 起走 ai.hintMove(不再直接叫 calculateBestMove):
+                   ① 殘局模式先找必勝殺法 —— 殘局的勝利條件是「將死」,對局引擎追求的是
+                      「子力 + 位置分」,這兩件事在殘局裡會分岔(使用者 0908 實機退件:
+                      3 手殺的題照著提示走到第 7 手還在走,還把車送去被將吃掉)。
+                   ② rootFilter:長將被 UI 擋掉的棋不推薦 —— 推薦了他會點不動、以為遊戲壞了。 */
+                res = this.ai.hintMove(this.gameLogic.getBoardState(), this.playerSide(), {
+                    puzzle: Boolean(this.daily),
+                    rootFilter: (m) => this.gameLogic.isAllowedMove(
+                        m.from.row, m.from.col, m.to.row, m.to.col),
+                });
             } catch (error) {
-                console.error('[hint] calculateBestMove threw:', error);
+                console.error('[hint] hintMove threw:', error);
                 this.say('💡 這一手算不出來,先自己走走看。');
                 return;
             }
-            if (!move) { this.say('💡 找不到可走的棋了。'); return; }
-            this.hint = { positionKey: key, from: move.from, to: move.to };
+            if (!res || !res.move) { this.say('💡 找不到可走的棋了。'); return; }
+            this.hint = { positionKey: key, from: res.move.from, to: res.move.to,
+                kind: res.kind, mateIn: res.mateIn, sacrifice: res.sacrifice };
             this.paintHint(this.hint);
         }, 30);
     }
@@ -390,9 +398,16 @@ class ArenaApp {
         const eat = board[hint.to.row][hint.to.col];
         this.renderer.highlightSquare(hint.from.row, hint.from.col);   // 內含 clearHighlights
         this.renderer.highlightMoves([{ row: hint.to.row, col: hint.to.col }]);
+        /* 文案三態(誠實鐵則):算出必勝 / 算不出必勝 / 一般對局。
+           ★ 殘局裡「算不出必勝」一定要講 —— 不講的話使用者以為照著走就會贏,
+             走個七八手發現沒進展,只會覺得「這 AI 好爛」(0908 實機退件)。 */
+        const tail = hint.kind === 'mate'
+            ? `・這是 ${hint.mateIn} 手必勝的第一手`
+                + (hint.sacrifice ? '(這顆會被對方吃掉,是故意的——棄子換將位,照走就對了)' : '')
+            : (this.daily ? '・⚠ 這個局面已經算不出必勝殺法(可能走偏了),這一手先改善局面;想從頭再來按「🔁 這題再來一次」' : '');
         this.say(`💡 建議走「${piece ? piece.name : '這顆'}」`
             + (eat ? `,吃掉對方的「${eat.name}」` : '')
-            + '(綠圈是它,綠點是要去的地方)');
+            + '(綠圈是它,綠點是要去的地方)' + tail);
     }
 
     /* ═══ 悔棋 ═══ */

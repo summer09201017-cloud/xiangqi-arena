@@ -145,32 +145,104 @@ body {
 .fs-toolbar select { min-height: 40px; padding: 6px 8px; font: inherit; border-radius: 8px; }
 .button-row .span2 { grid-column: 1 / -1; }
 
+/* ★★ 2026-09-08 重做「真的全螢幕」(使用者實機退件:
+      「手機上的全螢幕,不是真的全螢幕,還能看到一半的選單」)。
+   v8 的做法是**縱向排版**:狀態列 → 提示行 → 每日狀態行 → 棋盤(flex:1 拿剩下的高度)。
+   在手機**直向**(約 360×800)那排七顆工具鈕會折成三行,加上狀態列與提示行,
+   選單本身就吃掉快一半的螢幕高 ⇒ 棋盤只剩下半個,跟沒進全螢幕差不多。
+   (橫向有 @media(max-height:500px) 壓縮過,直向沒有 —— 而使用者就是直向拿手機。)
+ ⇒ 改成「棋盤吃滿整個視窗、選單浮在上面」:
+   ① .canvas-shell 用 absolute inset:0 佔滿整個面板 ⇒ 棋盤拿到 100% 的寬與高。
+   ② 工具列/狀態文字/每日狀態行改成**半透明浮層**,完全不佔棋盤的高度
+      (象棋盤是 9 寬 × 10 高,直向會靠寬度撐滿,上下本來就有空白 ⇒ 浮層不遮棋子)。
+   ③ .status-row 當浮層容器:pointer-events:none 讓點擊穿透到棋盤,
+      只有真的控制項自己收回 pointer-events:auto。
+   ④ 畫布角落那顆 ⛶ 在全螢幕裡藏掉 —— 工具列已經有「離開全螢幕」,兩顆意思打對台。 */
 body.fs-active { overflow: hidden; }
 .stage-panel.is-fs {
-  display: flex; flex-direction: column;
-  padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
-           max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  position: relative;               /* 浮層的定位基準(原生全螢幕與 pseudo-fs 共用) */
+  display: block; padding: 0;
   border: 0; border-radius: 0; box-shadow: none;
   background: #1b130e; color: #f6efe6;
+  overflow: hidden;
 }
 /* 沒有原生全螢幕的瀏覽器(iPhone Safari):用 fixed 蓋滿視窗,效果一樣只是留著瀏覽器列 */
 .stage-panel.is-fs.pseudo-fs { position: fixed; inset: 0; z-index: 40; }
-.stage-panel.is-fs .status-pill { color: #f6efe6; }
-.stage-panel.is-fs .tip { color: #d9c8b4; margin-top: 4px; }
-.stage-panel.is-fs .fs-toolbar { display: flex; }
+
+/* ① 棋盤 = 整個視窗 */
+.stage-panel.is-fs .canvas-shell {
+  position: absolute; inset: 0;
+  margin: 0; border-radius: 0;
+  height: auto; max-height: none;   /* 蓋掉平時的 clamp(...) 與窄螢幕的 62vh */
+}
+.stage-panel.is-fs .fs-btn { display: none; }
+.stage-panel.is-fs .tip { display: none; }
+
+/* ③ 浮層容器:點擊穿透 */
+.stage-panel.is-fs .status-row {
+  position: absolute; inset: 0; z-index: 6;
+  display: block; margin: 0; gap: 0;
+  pointer-events: none;
+}
+
+/* ② 工具列:貼著上緣的半透明橫條,可以折行(浮層折行不吃棋盤高度) */
+.stage-panel.is-fs .fs-toolbar {
+  pointer-events: auto;
+  position: absolute; left: 0; right: 0;
+  top: 0;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+  padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+           6px max(8px, env(safe-area-inset-left));
+  background: linear-gradient(180deg, rgba(20, 13, 9, 0.88), rgba(20, 13, 9, 0.62) 78%, rgba(20, 13, 9, 0));
+}
+.stage-panel.is-fs .fs-toolbar button,
+.stage-panel.is-fs .fs-toolbar select { min-height: 40px; }
 .stage-panel.is-fs .fs-toolbar button { background: #2b1f17; color: #f6efe6; border-color: #5a4536; }
 .stage-panel.is-fs .fs-toolbar button.primary { background: var(--accent); border-color: var(--accent); }
 .stage-panel.is-fs .fs-toolbar button:disabled { opacity: 0.4; }
-.stage-panel.is-fs .fs-toolbar select { background: #2b1f17; color: #f6efe6; border: 1px solid #5a4536; }
-.stage-panel.is-fs .canvas-shell {
-  flex: 1 1 auto; min-height: 0;
-  height: auto; max-height: none;   /* 蓋掉平時的 clamp(...) 與窄螢幕的 62vh */
-  margin-top: 8px; border-radius: 10px;
+/* ⚠ 難度下拉的 innerHTML 是從右側欄複製的,最寬的一項是「Lv.1 初級(隨機/淺層)」
+   ⇒ select 會照最寬的那一項自己撐開,在 360px 的手機上獨佔一整行(實機截圖就是這樣)。
+     這裡夾住寬度:選單打開時系統仍然顯示完整字樣,不影響看得懂。 */
+.stage-panel.is-fs .fs-toolbar select {
+  background: #2b1f17; color: #f6efe6; border: 1px solid #5a4536;
+  max-width: 116px;
 }
-/* 手機橫向很矮:提示那一行讓給棋盤,工具列也縮一點 */
+
+/* 行棋方徽章:工具列右下角外側,小小一顆 */
+.stage-panel.is-fs .turn-chip {
+  pointer-events: none;
+  position: absolute; right: max(10px, env(safe-area-inset-right)); bottom: 8px;
+  background: rgba(43, 31, 23, 0.86); border-color: #5a4536; color: #f7d9c6;
+}
+
+/* 狀態文字(💡 提示的說明就印在這裡)—— 放下緣,可以折到三行,不會被切掉 */
+.stage-panel.is-fs .status-pill {
+  pointer-events: none;
+  position: absolute; left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(44px, calc(env(safe-area-inset-bottom) + 40px));
+  display: flex; align-items: flex-start; gap: 8px;
+  color: #f6efe6; font-size: 13px; line-height: 1.55; font-weight: 700;
+  background: rgba(20, 13, 9, 0.82); border-radius: 12px; padding: 8px 10px;
+}
+.stage-panel.is-fs .status-pill .dot { flex: 0 0 auto; margin-top: 5px; }
+
+/* 每日殘局的狀態行:上緣工具列底下 */
+.stage-panel.is-fs .daily-line {
+  pointer-events: none;
+  position: absolute; left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(6px, env(safe-area-inset-bottom));
+  margin: 0; font-size: 12px; line-height: 1.5;
+  color: #ffe7d3; background: rgba(20, 13, 9, 0.82);
+  border-color: #5a4536;
+}
+
+/* 手機橫向很矮:工具列與文字再縮一點,棋盤留最多 */
 @media (max-height: 500px) {
-  .stage-panel.is-fs .tip { display: none; }
-  .stage-panel.is-fs .fs-toolbar button { min-height: 36px; padding: 4px 8px; font-size: 12px; }
+  .stage-panel.is-fs .fs-toolbar button,
+  .stage-panel.is-fs .fs-toolbar select { min-height: 36px; padding: 4px 8px; font-size: 12px; }
+  .stage-panel.is-fs .status-pill { font-size: 12px; padding: 6px 8px; }
 }
 
 /* ── 右側資訊欄 ── */

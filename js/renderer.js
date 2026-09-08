@@ -462,7 +462,14 @@ class ChessRenderer {
             /* 斜看時棋盤的投影比正上方**矮**(前後被壓縮),所以不必退太遠;
                1.06 是量出來的:再小四個角會出框(browser-check 那條會紅)。 */
             dist *= 1.06;
-            this.camera.position.set(0, -dist * 0.52, dist * 0.78);
+            /* ⛶ 2026-09-08:直向手機進全螢幕之後畫布變成 390×844 這種瘦高型,
+               相機是照「寬」裝下棋盤的(瘦高畫布一定是寬先滿),而斜看又把投影壓扁
+               ⇒ 棋盤只用掉約 36% 的高度,上下各一大片深色空白,棋子還是小的。
+               ⇒ 畫布越瘦高,就把相機壓得越接近正上方:投影跟著變高,同一個寬度下棋子更大。
+                 aspect ≥ 0.8(桌機、手機橫向)tall=0,觀感完全照舊,不動既有畫面。
+               ★ 寬度不受俯角影響,所以四個角照樣在框內(browser-check 的直向那條在守)。 */
+            const tall = Math.min(1, Math.max(0, (0.8 - aspect) / 0.4));
+            this.camera.position.set(0, -dist * (0.52 - 0.30 * tall), dist * (0.78 + 0.18 * tall));
             this.camera.up.set(0, 0, 1);
         }
         this.camera.lookAt(0, 0, 0);
