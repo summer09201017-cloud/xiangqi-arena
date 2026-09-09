@@ -63,6 +63,20 @@ class ChessRenderer {
             pieceRing: '#cfc7b5',  // 頂面那兩圈:柔和的灰 ★ 本站自有,參考站的字是 3D Text、沒有圈
             redInk: '#e63946',     // 紅方的字(Piece.jsx)
             blackInk: '#1d3557',   // 黑方的字:深藍(Piece.jsx)—— 不是黑
+            /* 🔴 「這顆吃得到」的顏色(2026-09-09 使用者指定:
+                 「讓炮能夠吃的棋子變成其他顏色,AI 提示也要」)。
+               ★ 為什麼特別是炮:車馬象的吃子目標就在走的路徑上,看得出來;
+                 **炮要隔一顆打**,目標和它中間隔著別的棋子、而且不相鄰
+                 ⇒ 小朋友根本看不出「原來那一顆吃得到」。
+               ★ 為什麼要染**主體**:本站原本已經把可吃目標的記號改成「畫在棋子上方的綠圈」,
+                 但那還是「加記號」。同 setSelectedPiece 那段的道理 ——
+                 32 顆同色棋子擺滿盤時,圈要找、換色一眼就看到。
+               ★ 配色分工:🟠 橘 = 「我選的/提示的是這一顆」 🔴 紅 = 「這些吃得到」
+                          🟢 綠 = 「可以走到這裡」(空點)
+                 頂面刻意用**淡**珊瑚紅(貼圖是象牙白底 + 紅/深藍的字,乘上淡色字才讀得出來);
+                 濃的紅留給底座。 */
+            capFace: 0xff8a80,     // 🔴 吃得到的那些棋子:頂面(淡珊瑚紅)
+            capRim: 0xc62828,      // 🔴 吃得到的那些棋子:底座轉深紅
             selFace: 0xf4a261,     // 🟠 被選中/被提示那顆的頂面(Piece.jsx selectedColor)
             selRim: 0x2e7d32,      // 🟠 被選中那顆的綠邊轉深綠(Piece.jsx)
         };
@@ -413,6 +427,7 @@ class ChessRenderer {
         /* ⚠ 這裡會把所有棋子 mesh 丟掉重建 ⇒ 先放掉「哪一顆被染橘」的記錄,
            不然 _selected 會指向一個已經 dispose 的 mesh(還原時寫到廢材質上,靜靜沒事但是錯的)。 */
         this.clearSelectedPiece();
+        this.clearCapturables();    // 同理:染紅的那幾顆也要先放掉(它是一個陣列,漏掉就是好幾個廢指標)
         // 清除舊的棋子 meshes
         for (const key in this.pieceMeshes) {
             this.scene.remove(this.pieceMeshes[key]);
@@ -550,15 +565,48 @@ class ChessRenderer {
          —— 首次截圖驗收就是這樣:提示說「吃掉對方的馬」,而那顆馬上面什麼都沒有,
          使用者只會覺得提示在亂講。⇒ 有子的格改畫一圈**比棋子大**的綠環,
          而且抬到棋子上方(z 高於棋高),不管有沒有子都看得到。 */
+    /* 🔴 把「這一顆吃得到」的棋子整顆染紅(2026-09-09 使用者指定,炮尤其需要)。
+       記原色再還原,同 setSelectedPiece 的坑;可吃目標可能**好幾顆**⇒ 用陣列記。 */
+    markCapturable(row, col) {
+        const mesh = this.pieceMeshes[`${row},${col}`];
+        if (!mesh || !Array.isArray(mesh.material)) return;
+        const face = mesh.material[1], upper = mesh.material[0];
+        const base = mesh.userData && mesh.userData.base;
+        this._capturables = this._capturables || [];
+        this._capturables.push({
+            mesh,
+            faceColor: face.color.getHex(),
+            upperColor: upper.color.getHex(),
+            baseColor: base ? base.material.color.getHex() : null,
+        });
+        face.color.setHex(this.PALETTE.capFace);
+        upper.color.setHex(this.PALETTE.capFace);
+        if (base) base.material.color.setHex(this.PALETTE.capRim);
+    }
+
+    clearCapturables() {
+        const list = this._capturables;
+        this._capturables = [];
+        if (!list) return;
+        for (const s of list) {
+            if (!s.mesh || !Array.isArray(s.mesh.material)) continue;
+            s.mesh.material[1].color.setHex(s.faceColor);
+            s.mesh.material[0].color.setHex(s.upperColor);
+            const base = s.mesh.userData && s.mesh.userData.base;
+            if (base && s.baseColor !== null) base.material.color.setHex(s.baseColor);
+        }
+    }
+
     highlightMoves(moves) {
         moves.forEach(move => {
             const pos = this.getGridPosition(move.row, move.col);
             const occupied = Boolean(this.pieceMeshes[`${move.row},${move.col}`]);
+            if (occupied) this.markCapturable(move.row, move.col);   // 🔴 那一顆本身也染紅
             const geo = occupied
                 ? new THREE.RingGeometry(this.PIECE_RADIUS + 0.4, this.PIECE_RADIUS + 1.6, 32)
                 : new THREE.CircleGeometry(1.6, 20);
             const mat = new THREE.MeshBasicMaterial({
-                color: occupied ? 0x22cc44 : 0x00ff00,
+                color: occupied ? this.PALETTE.capRim : 0x00ff00,   // 圈也改紅,和染色一致
                 transparent: true,
                 opacity: occupied ? 0.95 : 0.65,
                 side: THREE.DoubleSide,
@@ -574,6 +622,7 @@ class ChessRenderer {
     
     clearHighlights() {
         this.clearSelectedPiece();   // ⚠ 一起還原,否則選過的棋子會一直橘著
+        this.clearCapturables();     // ⚠ 可吃目標的紅色也要一起還原(可能好幾顆)
         this.highlightMeshes.forEach(mesh => {
             this.scene.remove(mesh);
             mesh.geometry.dispose();
