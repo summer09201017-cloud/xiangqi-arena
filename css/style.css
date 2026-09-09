@@ -245,6 +245,22 @@ body.fs-active { overflow: hidden; }
   .stage-panel.is-fs .status-pill { font-size: 12px; padding: 6px 8px; }
 }
 
+/* 🗂 全螢幕工具列可收起(2026-09-10,照抄 3D-Xiangqi 的「▲ 收起」)——
+   使用者:「浮層永遠佔著版面,收起式收起時棋盤拿 100%」。折疊鈕本身永遠留著(order:-1 排最前),
+   其餘按鈕/下拉一律藏起來(`*:not(.fold-toggle)` 不分標籤)。 */
+.stage-panel.is-fs .fs-toolbar .fold-toggle {
+  order: -1;
+  width: 34px; min-width: 34px; min-height: 34px; padding: 0;
+  font-size: 13px; line-height: 1;
+}
+.stage-panel.is-fs .fs-toolbar.folded > *:not(.fold-toggle) { display: none; }
+
+/* 🔄 手機橫向(orientation:landscape,矮螢幕)自動套用全螢幕版面(2026-09-10)——
+   使用者:「轉成橫式,棋盤比較大」。3D-Xiangqi / 3d-chinese-chess 的棋盤本來就是整個視窗
+   (沒有側欄),轉橫式自然變大;本站預設是側欄版面,只有按 ⛶ 才會全螢幕。
+   ⇒ JS 在偵測到手機橫向時自動套用同一套 .is-fs 版面(不呼叫真正的 Fullscreen API,
+     那需要使用者手勢;純 CSS 假全螢幕一樣能把棋盤放大到滿版)。見 js/app.js checkLandscapeAuto()。 */
+
 /* ── 右側資訊欄 ── */
 .info-panel { display: flex; flex-direction: column; gap: 14px; }
 .info-card { padding: 14px 16px; }

@@ -74,7 +74,7 @@ class ArenaApp {
             dailySkipButton: $('dailySkipButton'), fsDailySkipButton: $('fsDailySkipButton'),
             retryButton: $('retryButton'),
             // ⛶ 全螢幕棋盤
-            fsButton: $('fsButton'), fsButton2: $('fsButton2'), fsToolbar: $('fsToolbar'),
+            fsButton: $('fsButton'), fsButton2: $('fsButton2'), fsToolbar: $('fsToolbar'), fsFoldButton: $('fsFoldButton'),
             fsHintButton: $('fsHintButton'), fsUndoButton: $('fsUndoButton'),
             fsCameraButton: $('fsCameraButton'), fsExitButton: $('fsExitButton'),
             fsNewGameButton: $('fsNewGameButton'), fsDailyButton: $('fsDailyButton'), fsDifficultySelect: $('fsDifficultySelect'),
@@ -157,6 +157,57 @@ class ArenaApp {
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && this.pseudoFs) this.exitFullscreen();
         });
+
+        /* 🗂 全螢幕工具列可收起(2026-09-10,3D-Xiangqi 同款「▲ 收起」)——
+           使用者:「浮層永遠佔著版面,收起式收起時棋盤拿 100%」。
+           ⚠ localStorage 在 Safari 私密模式會丟例外(不是回 null)⇒ 讀寫都要包起來。 */
+        const FS_FOLD_KEY = 'xiangqi-arena-fs-fold-v1';
+        let fsFolded = false;
+        try { fsFolded = localStorage.getItem(FS_FOLD_KEY) === '1'; } catch (_) { /* 私密模式 */ }
+        const applyFsFold = () => {
+            el.fsToolbar.classList.toggle('folded', fsFolded);
+            el.fsFoldButton.setAttribute('aria-expanded', String(!fsFolded));
+            el.fsFoldButton.textContent = fsFolded ? '▼' : '▲';
+            el.fsFoldButton.title = fsFolded ? '展開工具列' : '收起工具列(棋盤看得更清楚)';
+        };
+        applyFsFold();
+        el.fsFoldButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            fsFolded = !fsFolded;
+            try { localStorage.setItem(FS_FOLD_KEY, fsFolded ? '1' : '0'); } catch (_) { /* 私密模式 */ }
+            applyFsFold();
+        });
+
+        /* 🔄 手機橫向自動套用全螢幕版面(2026-09-10)—— 使用者:「轉成橫式,棋盤比較大」。
+           3D-Xiangqi / 3d-chinese-chess 的棋盤本來就吃滿整個視窗,轉橫式自然變大;
+           本站預設是側欄版面,只有按 ⛶ 才會變成滿版。
+           ⇒ 偵測到「橫向 + 矮螢幕」(跟 CSS 那條 @media(max-height:500px) 同一個門檻)就自動
+             套用 .is-fs 版面 —— ★ 直接設 pseudoFs 並套用 class,不呼叫 requestFullscreen()
+             (那需要使用者手勢,在 orientationchange 裡呼叫一定被拒;CSS 假全螢幕不需要手勢,
+             一樣能讓棋盤滿版)。使用者若按「✕ 離開全螢幕」主動退出,記一個「這次橫向不要再自動進」
+             的旗標,轉回直向再轉回橫向時才重新啟用。 */
+        let landscapeAutoDismissed = false;
+        const isMobileLandscape = () => window.matchMedia('(orientation: landscape)').matches
+            && window.innerHeight <= 500;
+        const checkLandscapeAuto = () => {
+            if (isMobileLandscape()) {
+                if (!this.isFullscreen() && !landscapeAutoDismissed) {
+                    this.pseudoFs = true;
+                    this.applyFullscreenClass();
+                }
+            } else {
+                landscapeAutoDismissed = false;
+                if (this.pseudoFs && !this.nativeFullscreenElement()) {
+                    this.pseudoFs = false;
+                    this.applyFullscreenClass();
+                }
+            }
+        };
+        window.addEventListener('orientationchange', () => setTimeout(checkLandscapeAuto, 60));
+        window.addEventListener('resize', checkLandscapeAuto);
+        this._checkLandscapeAuto = checkLandscapeAuto;
+        this._markLandscapeAutoDismissed = () => { if (isMobileLandscape()) landscapeAutoDismissed = true; };
+        checkLandscapeAuto();
         el.saveButton.addEventListener('click', () => this.saveGame());
         el.loadButton.addEventListener('click', () => this.loadGame());
         el.rotateLeftButton.addEventListener('click', () => this.spin(-45));
@@ -604,6 +655,9 @@ class ArenaApp {
     }
     exitFullscreen() {
         this.pseudoFs = false;
+        /* 手動退出時若還在橫向,記一筆「這次橫向不要自動再進」——
+           轉回直向再轉回橫向會清掉這個旗標(checkLandscapeAuto 裡),下次還是會自動套用。 */
+        if (this._markLandscapeAutoDismissed) this._markLandscapeAutoDismissed();
         if (this.nativeFullscreenElement()) {
             const exit = document.exitFullscreen || document.webkitExitFullscreen;
             try {
