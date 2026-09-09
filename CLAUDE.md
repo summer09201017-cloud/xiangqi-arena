@@ -2,7 +2,21 @@
 
 ★ **先讀 `README.md`**(這個 repo 為什麼存在、功能、部署雷、11 個踩過的坑)。這份只放 AI 接手要守的鐵則與現況。
 
-## 現況(**2026-09-09,agape250 機**)
+## 現況(**2026-09-10,agape250 機**)
+
+- 🗂🔄 **全螢幕工具列可收起 + 手機轉橫式自動套用滿版(0910,使用者:「浮層永遠佔著版面,收起式收起時棋盤看得更清楚」+「手機轉成橫式,棋盤比較大,請讓所有象棋都能轉成橫式也能全螢幕」;SW v17,`f0c1d12`)**:
+  ① `#fsToolbar` 最左邊加 `#fsFoldButton`(▲/▼),CSS `.folded > *:not(.fold-toggle){display:none}`
+     一次藏掉其餘按鈕/下拉,狀態記 `localStorage`(`xiangqi-arena-fs-fold-v1`)。
+  ② `checkLandscapeAuto()`(`js/app.js`):手機橫向(`orientation:landscape` + `innerHeight<=500`,
+     跟既有 `@media(max-height:500px)` 同門檻)自動 `this.pseudoFs=true` + `applyFullscreenClass()`
+     ——**不呼叫** `requestFullscreen()`(那需要使用者手勢,`orientationchange` 裡一定被拒;
+     CSS 假全螢幕不需要手勢一樣讓 `.canvas-shell` 變 `position:absolute;inset:0` 吃滿整個面板)。
+     手動按「✕ 離開全螢幕」時若還在橫向記 `landscapeAutoDismissed`(這次不再自動彈回),
+     轉回直向再轉回橫向才清掉、重新啟用。
+  ★ 3D-Xiangqi / 3d-chinese-chess 不用比照辦理:那兩站的畫布本來就是 `100vw`/`100vh`
+    (沒有側欄版面),轉橫式已經自然變大;本站是唯一「預設側欄、只有按 ⛶ 才滿版」的站。
+  🔬 Playwright 6 項(自動套用/折疊/轉直向退出/轉回橫向重新套用/手動離開後 resize 不彈回/
+  真的轉一圈才重新啟用)全綠;npm test rules 45・daily 251・vertag 9・hint 6 全綠。
 
 - 🖐🎨 **手機旋轉靈敏度 + 回退直向俯角 + 換舊站配色(0909,使用者實機退件)**:
   ① 「手機版棋盤旋轉與移動太靈敏、太快了」。病根是 `OrbitControls.rotateSpeed` 一直用預設 **1.0**:
