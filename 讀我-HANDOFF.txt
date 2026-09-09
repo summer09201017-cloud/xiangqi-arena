@@ -1,8 +1,28 @@
 ============================================================
 3D 象棋對局場(xiangqi-arena)— 交接說明(讀我-HANDOFF.txt)
-更新:2026-09-07(HFP 機・Opus 5)🎯 💡 提示加「多賺半個卒才建議吃子」門檻 + 修好「提示只搜第 1 層」的 bug
-      (SW xiangqi-3d-shell-v9、verTag v9,線上驗過)
+更新:2026-09-10(agape250 機・Sonnet 5・0909-take-over 場)🗂 全螢幕工具列可收起 + 🔄 手機轉橫式自動套用滿版
+      (SW xiangqi-3d-shell-v17、verTag v17,線上驗過)
 ============================================================
+
+★★★★★ 2026-09-10(agape250 機・Sonnet 5・0909-take-over 場)🗂 全螢幕工具列可收起 + 🔄 手機轉橫式自動套用滿版 ✅ 已上線(f0c1d12)★★★★★
+  由來:使用者拍板做「可收起選單移植」清單裡 CP 最高的一項,並追加:「我發現手機轉成橫式,棋盤比較大,
+       請讓所有象棋都能轉成橫式也能全螢幕,並棋盤變大,參考橫式的 3D-Xiangqi 的大棋盤」。
+  查清楚為什麼只有這一站需要改:3D-Xiangqi / 3d-chinese-chess 的畫布本來就是 100vw/100vh(不分是否
+       全螢幕),轉橫式自然變大;本站是唯一「預設側欄版面、只有按 ⛶ 才滿版」的站。
+  改動(js/app.js + css/style.css + index.html):
+    · `#fsToolbar` 最左邊加 `#fsFoldButton`(▲/▼),CSS `.folded > *:not(.fold-toggle){display:none}`
+      藏掉其餘 7 顆按鈕 + 難度下拉,狀態記 `localStorage`(`xiangqi-arena-fs-fold-v1`)。
+    · `checkLandscapeAuto()`:偵測手機橫向(`orientation:landscape` + `innerHeight<=500`)自動
+      `this.pseudoFs=true` + `applyFullscreenClass()` —— **不呼叫** `requestFullscreen()`
+      (那需要使用者手勢,在 `orientationchange` 裡一定被拒;CSS 假全螢幕不需要手勢,一樣讓
+      `.canvas-shell` 變 `position:absolute;inset:0` 吃滿整個面板)。
+    · 手動按「✕ 離開全螢幕」時若還在橫向記 `landscapeAutoDismissed`(這次不再自動彈回),
+      轉回直向再轉回橫向,或重新整理,才清掉重新啟用。
+  測試:npm test rules 45・daily 251・vertag 9・hint 6 全綠;Playwright 6 項(自動套用/折疊/
+    轉直向退出/轉回橫向重新套用/手動離開後 resize 不彈回/真的轉一圈才重新啟用)全綠。
+  部署:`npm run stage` → `npx wrangler pages deploy .deploy --project-name incandescent-stroopwafel-31007a --branch main`;
+    線上驗過 sw v17 + fsFoldButton + checkLandscapeAuto 都在。
+  git 實況(交接前真的問過 git):status --short 空、HEAD 637b3fc(含 CLAUDE.md 補記)、rev-list @{u}..HEAD = 0。
 
 ★★★★★ 2026-09-07(HFP 機・Opus 5・session 0906-3D西洋棋棋字名)🎯 提示加「多賺半個卒才建議吃子」門檻 + 修好提示只搜第 1 層的 bug ✅ 已上線(aa3951e)★★★★★
   由來:使用者在 3D 幻影西洋棋退件「提示叫我吃、吃完又被別的子吃回,等於交換被吃」⇒ 全棋類提示體檢。
