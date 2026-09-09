@@ -78,7 +78,7 @@
 - ✅ v1 重建版(0901~0902,`828a06e` / `f1ab8e7`):開局譜 / 盤面快照存讀檔 / 2D-3D / 長將 / 悔棋 / 💡 提示 /
   📅 每日殘局 5 題 / 統計打點 / `npm run stage` 乾淨部署包。
 - ✅ v2 ⛶ 全螢幕棋盤(0902,`f06ddac`):使用者「要能全螢幕,因下棋的畫面太小」。
-- 線上 https://incandescent-stroopwafel-31007a.pages.dev = 最新(**SW `xiangqi-3d-shell-v11`、verTag v11**)。
+- 線上 https://incandescent-stroopwafel-31007a.pages.dev = 最新(**SW `xiangqi-3d-shell-v14`、verTag v14**;0909 這一輪:🎨 配色以「渲出像素」對齊參考站 + ♟ 棋子雙層 + 🔍 貼圖 256/anisotropy,`21262de`,線上已驗)。
 - 測試:`npm test` = **rules 45/0 + daily 251/0 + vertag 9/9 + hint 6/0**;`npm run check` **49/0**(本機與線上都跑過)。
 - 待做見 `roadmap.md`;給另一台機的在 `讀我-HANDOFF.txt`。
 
