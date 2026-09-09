@@ -24,27 +24,41 @@ class ChessRenderer {
               它是**第三個**中國象棋站 `3d-chinese-chess`(React + Vite,**有完整原始碼**),
               還活著,線上三個網址:3dchinese / 3d-chinese-chess / 3dchinesechess .pages.dev。
               `3chinese.netlify.app` 只是它搬到 CF Pages 之前的舊 Netlify 網址(現在 404)。
-              ⇒ 所以配色**不必**靠截圖目測,直接抄它的原始碼精確值(下面這幾個就是):
+              ⇒ 小面積的色(棋子的字、選中色)直接抄它的原始碼精確值:
                 `src/components/Piece.jsx`(棋子面/綠邊/紅字/黑字)、`src/components/Board.jsx`
                 (盤面 #ebc38a、格線 #594433)、`src/App.jsx`(背景 #2c3e50)。
-              第一版我目測的值(bg 0x2f4050 / boardTop 0xece0c0 / gridLine 0x5b3a1a /
-              pieceSide 0x3fa84c / face #f8f5ee / red #d81f26 / black #1b2a5e)都很接近但不精確,
-              已全部換成上面那份原始碼的值。boardSide 是唯一「推」出來的:參考站的盤是平面、沒有側面色。
-           ★ 參考站的「選中/被提示的棋子」是**橘色** `#f4a261` 頂面 + 深綠 `#2e7d32` 邊。
-             本站不抄那一套:本站的提示是綠圈 + 綠點(不動棋子本身的顏色),兩者不要混。
+              ⚠⚠ **但盤面與棋子綠不能照抄色碼**,也不能靠目測 —— 見下面 PALETTE 那段:
+                0909 使用者第二次退件(「棋盤較橘 / 底部深綠且只有一層」)查出真因是**曝光爆掉**,
+                修法是先修光預算、再用「渲出來的像素」對齊參考站的實測值。
+           ★ 參考站的「選中/被提示的棋子」是**橘色** `#f4a261` 頂面 + 深綠 `#2e7d32` 邊 ——
+             0909 使用者拍板「這個很好,要學起來」,本站已照抄(見 setSelectedPiece);
+             綠圈與綠點同時保留,它們指的是「要走到哪」,和「是哪一顆」是兩件事。
            改之前(整片偏黃褐、和背景糊在一起):棋盤 0xd2b48c、格線 0x000000、
              棋子頂 #f0d9b5 + 棕圈、棋子側 0xe0c090、紅字 #ff0000、黑字 #000000、背景 0x333333。 */
         this.PALETTE = {
             bg: 0x2c3e50,          // 背景:深板岩藍(App.jsx 的 <color background>)
-            /* 盤面/盤側 ⚠ **刻意不用參考站的十六進位值**(它是 0xebc38a)。
-               同一個色碼在不同的材質與燈光下**不是同一個顏色**:參考站是 R3F 的
-               meshStandardMaterial + roughness 0.8,本站是 MeshPhongMaterial + 環境光 0.6
-               + 平行光 0.8 ⇒ 照抄 0xebc38a 渲出來明顯偏黃(實機截圖比對過),
-               反而比目測值離參考站的觀感**更遠**。⇒ 這兩個值以「看起來像不像截圖」為準,不是以色碼為準。 */
-            boardTop: 0xece0c0,    // 盤面:米白(對齊截圖觀感,不是對齊色碼)
-            boardSide: 0xdcc9a0,   // 盤側(厚度)比盤面深一階(參考站是平面盤,沒有側面色)
+            /* 🎨 盤面與棋子綠 ⚠⚠ 這些值是**用實測像素反推**的,不是照抄色碼、也不是目測截圖。
+               ★★ 2026-09-09 使用者退件:「3d-chinese-chess 的棋盤較橘,另兩支很白;
+                  參考站棋子有兩層(上白、下層底部螢光綠),另兩支底部深綠且只有一層」。
+               ★★ 取使用者手機截圖的像素比對(河界空白帶 / 棋子側面各取一片,量中位與眾數):
+                    · 盤面   參考站 rgb(232,224,208) 暖米 ↔ 本站 rgb(248,248,248) **近全白**
+                    · 棋子綠 參考站 rgb(88,176,88) 亮綠  ↔ 本站 rgb(40,104,40) **深綠**
+               ★★ 病因**不是色碼寫錯,是曝光爆掉**(算式逐位對得上,不是猜的):
+                    · 盤面朝上(n=+Z)吃 環境光 0.6 + 平行光 0.8×0.808 = **1.246 倍**
+                      ⇒ 舊值 0xece0c0 (236,224,192) × 1.246 = (294,279,239)
+                      ⇒ 紅綠兩個 channel **直接裁到 255** ⇒ 暖色被裁掉,看起來就是白的。
+                    · 圓柱側面法線水平 ⇒ 對主光 n·l ≤ 0 ⇒ **只吃到環境光 0.6**
+                      ⇒ 0x4caf50 (76,175,80) × 0.6 = (46,105,48) ≈ 實測 (40,104,40)。
+               ⇒ 所以先修**光預算**(見下面 Lights 段),材質色碼才有意義;
+                 修好之後這兩個值就幾乎等於參考站的**渲出像素**(實測驗過:盤面 Δ(1,1,2)、綠 Δ(-2,-5,-2))。
+               ⚠ 舊註解寫「照抄 0xebc38a 會偏黃 ⇒ 以目測觀感為準」——**方向對、結論錯**:
+                 偏黃正是 1.246 倍裁切造成的。⇒ 通則:**大面積色與「只吃得到環境光的面」
+                 一定要量渲出來的像素**,比 material 色碼(甚至目測截圖)都會得出錯的結論。 */
+            boardTop: 0xe0d8c9,    // 盤面 → 渲出來 ≈ rgb(232,224,208) = 參考站實測值(量測反推,別手改)
+            boardSide: 0xcec6b3,   // 盤側(厚度)比盤面深一階(參考站是平面盤,沒有側面色)
             gridLine: 0x594433,    // 格線:深咖啡(Board.jsx lineColor)—— 不是黑
-            pieceSide: 0x4caf50,   // ★ 棋子綠邊 = 使用者說的「綠底棋子」(Piece.jsx 下半圓柱)
+            pieceSide: 0x58b058,   // ★ 棋子綠底座 → 渲出來 ≈ rgb(88,176,88) = 參考站實測值
+            pieceUpper: 0xfdfaf6,  // ★ 棋子**上層**圓柱的側面:象牙白(參考站是雙層,上白下綠)
             pieceFace: '#fdfaf6',  // 棋子頂面:象牙白(Piece.jsx 上半圓柱)
             pieceRing: '#cfc7b5',  // 頂面那兩圈:柔和的灰 ★ 本站自有,參考站的字是 3D Text、沒有圈
             redInk: '#e63946',     // 紅方的字(Piece.jsx)
@@ -60,7 +74,13 @@ class ChessRenderer {
         this.BOARD_HEIGHT = 10 * this.SQUARE_SIZE_Y;
         this.BOARD_THICKNESS = 4;
         this.PIECE_RADIUS = 4;
-        this.PIECE_HEIGHT = 2;
+        /* 棋子厚度。★ 2026-09-09 從 2 調到 3:改成「上白下綠」雙層之後,
+           每一層只有 1 單位高,綠底座在 8 單位直徑的盤上細得像一條線。
+           參考站 3d-chinese-chess 的比例是 高:徑 = 0.30:0.84 ≈ 0.36,本站 2:8 = 0.25
+           ⇒ 取 3(3:8 = 0.375)最接近它,綠色帶的厚度才讀得出來。
+           ⚠ 這個值同時是棋子的 z 定位(PIECE_HEIGHT/2 + 0.1 = 貼在盤面上)與
+             提示標記的高度基準 ⇒ 改它會一起跟著縮放,不要另外寫死數字。 */
+        this.PIECE_HEIGHT = 3;
         
         this.highlightMeshes = [];
         this.animationId = null;
@@ -132,14 +152,28 @@ class ChessRenderer {
         this.controls.maxPolarAngle = Math.PI; // 允許轉到棋盤正下方
         this.controls.minPolarAngle = 0; // 允許轉到正上方純 2D 視角
         
-        // 5. Lights
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        /* 5. Lights ⚠⚠ 這三顆的強度是**光預算**,不是隨手調的觀感值(2026-09-09 重算)。
+             舊配置 環境 0.6 + 主光 0.8 讓朝上的盤面吃到 0.6 + 0.8×0.808 = **1.246 倍**
+             ⇒ 任何暖色的 R/G channel 都被裁到 255 ⇒ 盤面永遠是白的,調色碼調不回來。
+             而圓柱側面對主光 n·l ≤ 0 ⇒ 只吃環境光 0.6 ⇒ 綠底座永遠是深綠。
+             新配置(兩個面都落在 ~1.0 倍,不裁切也不欠光):
+               · 朝上(n=+Z):0.55 + 0.50×0.808 + 0.45×0.083 = **0.991**
+               · 面向相機的側面:0.55 + 0.45×0.997 = **0.998**
+             ★ 補光刻意壓在**低仰角**(z=10 對水平 120):仰角高的話從正上方看盤面
+               會再吃到 0.45 倍 ⇒ 又爆掉。方位角則跟著相機轉(見 animate),
+               否則轉到另一側時側面又只剩環境光、綠色又變深。 */
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
         this.scene.add(ambientLight);
-        
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.50);
         dirLight.position.set(50, 50, 100);
         dirLight.castShadow = true;
         this.scene.add(dirLight);
+
+        // 側面補光:方位跟著相機(animate 裡更新)、仰角固定很低、不投影(投影是主光的事)
+        this.fillLight = new THREE.DirectionalLight(0xffffff, 0.45);
+        this.fillLight.position.set(0, -120, 10);
+        this.scene.add(this.fillLight);
         
         // 6. Build Board
         this.createBoard();
@@ -263,35 +297,45 @@ class ChessRenderer {
         return null;
     }
 
+    /* 🔍 貼圖 128 → 256(字 60 → 120px)+ anisotropy 開到硬體上限(2026-09-09)。
+       由來:姊妹站 3D-Xiangqi 同日被退件「字體模糊不清,越右邊越看不清楚」——
+       那邊的主因是漏了 `setPixelRatio`(本站一直都有),但 128 貼圖 + 沒開各向異性過濾
+       這第二層本站也有:**斜視角**(橫向時遠端的棋子)mipmap 會挑到過度模糊的層級。
+       ⚠ anisotropy 要拿 `renderer.capabilities.getMaxAnisotropy()`,不可以寫死 16:
+         寫死的話在不支援的裝置上 three 會靜靜夾回 1(沒有錯誤訊息,也沒有紅燈)。 */
     createPieceTexture(name, isRed) {
+        const S = 256, C = S / 2;                  // 邊長與中心(原本 128/64,整體 ×2)
         const canvas = document.createElement('canvas');
-        canvas.width = 128;
-        canvas.height = 128;
+        canvas.width = S;
+        canvas.height = S;
         const ctx = canvas.getContext('2d');
-        
+
         // 背景
         ctx.fillStyle = this.PALETTE.pieceFace;
         ctx.beginPath();
-        ctx.arc(64, 64, 60, 0, Math.PI * 2);
+        ctx.arc(C, C, 120, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = this.PALETTE.pieceRing;
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 8;
         ctx.stroke();
 
         // 內圈
         ctx.beginPath();
-        ctx.arc(64, 64, 48, 0, Math.PI * 2);
-        ctx.lineWidth = 2;
+        ctx.arc(C, C, 96, 0, Math.PI * 2);
+        ctx.lineWidth = 4;
         ctx.stroke();
-        
+
         // 文字
         ctx.fillStyle = isRed ? this.PALETTE.redInk : this.PALETTE.blackInk;
-        ctx.font = 'bold 60px "楷体", "KaiTi", serif';
+        ctx.font = 'bold 120px "楷体", "KaiTi", serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(name, 64, 64);
-        
+        ctx.fillText(name, C, C);
+
         const texture = new THREE.CanvasTexture(canvas);
+        if (this.renderer && this.renderer.capabilities) {
+            texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+        }
         /* ⚠⚠ 圓柱頂面的 UV 配上 geometry.rotateX(π/2) 之後,字是**轉了 90°** 的。
            修法就一行:把貼圖轉回來(不要去改畫字那段 —— 改畫字的話,
            將來換成圖片素材又會歪)。
@@ -310,27 +354,58 @@ class ChessRenderer {
         return texture;
     }
     
+    /* ♟ 棋子是**兩層**圓柱:上層象牙白(帶字的頂面)、下層亮綠底座,而且下層**比上層寬**
+         (2026-09-09 使用者退件:「參考站棋子有兩層,上層白色、下層底部螢光綠;
+          另兩支底部深綠且只有一層」)。
+       ★ 比例逐字取自參考站 `3d-chinese-chess/src/components/Piece.jsx`:
+           上層 cylinder(0.40, 0.42, 0.15)、下層 cylinder(0.42, 0.45, 0.15)
+         ⇒ 整顆是**往下微微外擴的錐台**,最寬處在最底部。
+         本站等比縮放到「最寬處 = PIECE_RADIUS」⇒ 0.40:0.42:0.45 ÷ 0.45 × 4 = 3.56 : 3.73 : 4.00。
+         ⚠ 最寬處**必須**維持 PIECE_RADIUS(=4):SQUARE_SIZE_Y 只有 8.5,
+           底座若外擴到 4.3 ⇒ 直徑 8.6 > 8.5 ⇒ 上下相鄰的棋子會互相穿透。
+       ⚠ 上層是 parent、下層是它的 child,不是兩個獨立 mesh —— 三個理由:
+         ①`raycaster.intersectObjects(scene.children)` 是**非遞迴**的 ⇒ 只有 parent 被點得到,
+           不會出現「點到底座但拿不到 userData.piece」的空指標。
+         ②`updateBoardState` 只 remove parent,child 自動跟著走,不必另外記帳。
+         ③ 染橘(setSelectedPiece)只要沿著 parent 找 userData.base 就拿得到底座材質。 */
     createPieceMesh(piece) {
-        const geometry = new THREE.CylinderGeometry(this.PIECE_RADIUS, this.PIECE_RADIUS, this.PIECE_HEIGHT, 32);
-        // Cylinder 預設是立著的，沿著 Y 軸。我們要讓它躺平在棋盤上，並旋轉 90 度使得頂部朝上 (Z軸正向)
-        geometry.rotateX(Math.PI / 2);
-        
+        const R = this.PIECE_RADIUS;         // 最寬處(最底部)
+        const rTop = R * (0.40 / 0.45);      // 3.556
+        const rMid = R * (0.42 / 0.45);      // 3.733
+        const half = this.PIECE_HEIGHT / 2;  // 上下層各佔一半
+
+        /* Cylinder 預設沿 Y 軸立著,rotateX 讓它躺平、頂面朝 +Z(本站的字是用
+           `texture.rotation` 扶正的,所以不像姊妹站還要再 rotateZ)。
+           ⚠ translate 一定要在 rotate **之後**:那時 geometry 的本地座標系才是「+Z 朝上」,
+             平移量才會落在厚度方向;順序反過來會把上層推到旁邊(畫面上只是「棋子歪了」,不像 bug)。 */
+        const poseAndLift = (geo, dz) => {
+            geo.rotateX(Math.PI / 2);
+            geo.translate(0, 0, dz);
+            return geo;
+        };
+
         const texture = this.createPieceTexture(piece.name, piece.color === 'red');
-        
-        // 材質陣列：側面使用木頭色，頂面使用帶有文字的紋理
-        const greenRim = new THREE.MeshPhongMaterial({ color: this.PALETTE.pieceSide });
-        const materials = [
-            greenRim,                                       // 側面 = 綠(使用者指定的「綠底棋子」)
+
+        // ── 上層(parent):象牙白側面 + 帶字的頂面 ──
+        const upperGeo = poseAndLift(new THREE.CylinderGeometry(rTop, rMid, half, 32), half / 2);
+        const ivory = new THREE.MeshPhongMaterial({ color: this.PALETTE.pieceUpper });
+        const mesh = new THREE.Mesh(upperGeo, [
+            ivory,                                          // 側面 = 象牙白(上層)
             new THREE.MeshPhongMaterial({ map: texture }),  // 頂面 = 象牙白 + 字
-            greenRim                                        // 底面
-        ];
-        
-        const mesh = new THREE.Mesh(geometry, materials);
+            ivory,                                          // 底面(被下層蓋住,看不到)
+        ]);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        
-        // 附加棋子資料供射線檢測使用
-        mesh.userData = { piece: piece };
+
+        // ── 下層(child):亮綠底座,比上層寬 ──
+        const baseGeo = poseAndLift(new THREE.CylinderGeometry(rMid, R, half, 32), -half / 2);
+        const base = new THREE.Mesh(baseGeo, new THREE.MeshPhongMaterial({ color: this.PALETTE.pieceSide }));
+        base.castShadow = true;
+        base.receiveShadow = true;
+        mesh.add(base);
+
+        // 附加棋子資料供射線檢測使用;base 一起帶著,染橘/還原時要用
+        mesh.userData = { piece: piece, base: base };
         return mesh;
     }
     
@@ -424,14 +499,22 @@ class ChessRenderer {
         this.clearSelectedPiece();
         const mesh = this.pieceMeshes[`${row},${col}`];
         if (!mesh || !Array.isArray(mesh.material)) return;
-        const face = mesh.material[1], rim = mesh.material[0];
+        /* 棋子改成雙層之後,「邊」不再是 material[0](那是上層的象牙白側面),
+           而是 child 底座 `userData.base`。上層的側面與頂面一起轉橘(參考站是把整個
+           上層圓柱設成 #f4a261),底座轉深綠。
+           ⚠ material[0] 與 material[2] 是**同一個材質物件**(上層側面+底面共用)
+             ⇒ 記一份原色就夠,設一次就兩面都變。 */
+        const face = mesh.material[1], upper = mesh.material[0];
+        const base = mesh.userData && mesh.userData.base;
         this._selected = {
             mesh,
             faceColor: face.color.getHex(),
-            rimColor: rim.color.getHex(),
+            upperColor: upper.color.getHex(),
+            baseColor: base ? base.material.color.getHex() : null,
         };
         face.color.setHex(this.PALETTE.selFace);
-        rim.color.setHex(this.PALETTE.selRim);
+        upper.color.setHex(this.PALETTE.selFace);
+        if (base) base.material.color.setHex(this.PALETTE.selRim);
     }
 
     clearSelectedPiece() {
@@ -440,7 +523,9 @@ class ChessRenderer {
         this._selected = null;
         if (!s.mesh || !Array.isArray(s.mesh.material)) return;
         s.mesh.material[1].color.setHex(s.faceColor);
-        s.mesh.material[0].color.setHex(s.rimColor);
+        s.mesh.material[0].color.setHex(s.upperColor);
+        const base = s.mesh.userData && s.mesh.userData.base;
+        if (base && s.baseColor !== null) base.material.color.setHex(s.baseColor);
     }
     highlightSquare(row, col) {
         this.clearHighlights();
@@ -641,6 +726,17 @@ class ChessRenderer {
         }
         
         if (this.controls) this.controls.update();
+
+        /* 側面補光的**方位角**跟著相機轉,仰角固定壓低(見 Lights 段的算式)。
+           不跟的話:轉到棋盤另一側時,面向相機的那半圈側面對兩顆光都是背光
+           ⇒ 綠底座又只剩環境光 0.55 ⇒ 使用者退掉的深綠原地復活,而且只在某些角度出現
+           (最難查的那種:截圖角度剛好對就看不到)。 */
+        if (this.fillLight && this.camera) {
+            const c = this.camera.position;
+            const d = Math.hypot(c.x, c.y) || 1;
+            this.fillLight.position.set((c.x / d) * 120, (c.y / d) * 120, 10);
+        }
+
         if (this.renderer && this.scene && this.camera) {
             this.renderer.render(this.scene, this.camera);
         }
