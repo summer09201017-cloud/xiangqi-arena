@@ -71,6 +71,7 @@ class ArenaApp {
             dailyButton: $('dailyButton'),
             overlay: $('gameOverOverlay'), winnerText: $('winnerText'),
             dailyNextButton: $('dailyNextButton'), dailyRetryButton: $('dailyRetryButton'),
+            dailySkipButton: $('dailySkipButton'), fsDailySkipButton: $('fsDailySkipButton'),
             retryButton: $('retryButton'),
             // ⛶ 全螢幕棋盤
             fsButton: $('fsButton'), fsButton2: $('fsButton2'), fsToolbar: $('fsToolbar'),
@@ -167,6 +168,14 @@ class ArenaApp {
             const next = this.nextUnsolvedIndex();
             this.startDaily(next >= 0 ? next : 0);
         });
+        /* ⏭ 遊戲中的「換一題」(使用者 0909:「改成不想解這一題,也能換接下一題」)。
+           ⚠ 刻意不寫任何紀錄:被跳掉的那題不算解過、不記步數(startDaily 會歸零)。 */
+        el.dailySkipButton.addEventListener('click', () => {
+            if (!this.daily) return;
+            const next = this.nextDailyIndex();
+            if (next >= 0) this.startDaily(next);
+        });
+        el.fsDailySkipButton.addEventListener('click', () => el.dailySkipButton.click());
 
         el.difficultySelect.addEventListener('change', () => {
             this.difficulty = el.difficultySelect.value;
@@ -540,6 +549,22 @@ class ArenaApp {
         }
         return -1;
     }
+    /* ⏭ 「這題先跳過,換下一題」的目標索引(2026-09-09)。
+       ★ 和 nextUnsolvedIndex() 的差別:那一支是**解完之後**接下一題用的,沒有未解的就回 -1
+         (代表今天做完了);這一支是**中途想換**,所以一定要給得出一題 ——
+         全都解過了就單純換下一題(讓人可以重玩),不會按了沒反應。
+       ★ 順序:從現在這題的下一題開始往後繞一圈、優先挑還沒解的
+         ⇒ 連按幾次會走過今天還沒解的每一題,而不是在兩題之間跳來跳去。 */
+    nextDailyIndex() {
+        if (!this.daily) return -1;
+        const list = this.daily.set.puzzles;
+        const solved = this.dailySolved(this.daily.key);
+        for (let k = 1; k <= list.length; k++) {
+            const i = (this.daily.index + k) % list.length;
+            if (!solved[list[i].id]) return i;
+        }
+        return (this.daily.index + 1) % list.length;
+    }
 
     /* ═══ 畫面 ═══ */
     showOverlay(text, opts) {
@@ -640,6 +665,9 @@ class ArenaApp {
         el.fsHintButton.disabled = el.hintButton.disabled;
         el.fsDailyButton.disabled = el.dailyButton.disabled;
         el.fsDailyButton.classList.toggle('hidden', el.dailyButton.classList.contains('hidden'));
+        // ⏭ 「換一題」只有在每日模式才有意義(對局沒有「下一題」);全螢幕那顆跟著側欄
+        el.dailySkipButton.classList.toggle('hidden', !inDaily);
+        el.fsDailySkipButton.classList.toggle('hidden', !inDaily);
 
         const rotatable = this.viewMode === '2d';
         el.rotateLeftButton.disabled = !rotatable;
