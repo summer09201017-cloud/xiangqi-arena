@@ -1,8 +1,33 @@
 ============================================================
 3D 象棋對局場(xiangqi-arena)— 交接說明(讀我-HANDOFF.txt)
-更新:2026-09-10(agape250 機・Sonnet 5)💡 提示點綠點沒反應 + 手機橫向提示擋棋盤
-      (SW xiangqi-3d-shell-v18、verTag v18,線上驗過)
+更新:2026-09-10(agape250 機・Sonnet 5)📍 提示移到工具列下方(可折疊) + 🎓 新增大師難度
+      (SW xiangqi-3d-shell-v19、verTag v19,線上驗過)
 ============================================================
+
+★★★★★ 2026-09-10(agape250 機・Sonnet 5)📍 提示移到工具列下方(可折疊) + 🎓 新增大師難度 ✅ 已上線(82ee949,v19)★★★★★
+  由來:使用者實機回報兩件:①「橫式AI提示在下方,依然擋住棋盤,建議做可以收起AI提示或
+       AI提示移到最上方」②「AI提示太弱了,竟然會叫炮去吃馬,因吃馬後就會被車吃掉,請加強
+       AI能力,可以AI也是最高級或大師級嗎?」。
+  ① 提示位置:上一輪的 line-clamp 只治標(門檻抓 max-height:500px,實際上使用者裝置沒踩中
+     那個門檻,提示還是貼在螢幕最下緣)。這輪換病根:`.status-pill` 改成貼工具列**下緣**
+     (css: `top: calc(var(--fs-toolbar-h,48px) + ...)`,`--fs-toolbar-h` 是 js/app.js 量
+     `fsToolbar.offsetHeight` 真實寫進去的,不是猜的常數,折疊/resize/進出全螢幕都重量);
+     並且跟工具列共用同一顆摺疊鈕(`.status-row.hint-folded .status-pill{display:none}`)——
+     使用者提的「收起」與「移到最上方」兩個建議用同一個機制一次做到,不必再加一顆鈕。
+     新增 scripts/check-hint-position.mjs 驗證,★ 突變驗過會咬。
+  ② 大師難度:js/ai.js `LEVELS.master = {depth:8, ms:2200, tieRandom:false}`(比原本最深的
+     「高級」depth 6 再深兩層、同分不隨機亂挑)。對局控制側欄與全螢幕工具列的難度選單都選
+     得到(fsDifficultySelect 是複製 difficultySelect 的 innerHTML,不用另外維護一份)。
+  ③ 查證「炮吃馬被車吃掉」:用**開局盤面**實測同一種戰術(紅炮(2,7)隔黑炮(7,7)吃黑馬(9,7),
+     馬旁邊(9,8)就是黑車)—— `ai._captureGain` 正確算出淨虧 20 分,`ai.hintMove` 也真的
+     沒有推薦這一手(log:「推薦吃子 否」)。這條 0907 就上線的防呆本身沒問題,**沒能重現**
+     使用者說的那個提示 —— 可能是更複雜、牽涉多子的局面。已在 verTag 請使用者下次遇到時
+     補一張「按提示當下」的截圖,不要再憑空猜盤面。
+  測試:npm test(rules 45・daily 251・vertag 9・hint 6)、browser-check 49/0、
+    check-hint-position 4/0,全綠。
+  部署:npm run stage → npx wrangler pages deploy .deploy --project-name incandescent-stroopwafel-31007a --branch main;
+    線上驗過 sw v19(v18→v19)+ verTag v19 + Lv.4 大師選項 + hint-folded 都在。
+  git 實況(交接前真的問過 git):status --short 空、HEAD 82ee949、rev-list @{u}..HEAD = 0。
 
 ★★★★★ 2026-09-10(agape250 機・Sonnet 5)💡 提示點綠點沒反應 + 📱 手機橫向提示擋棋盤 ✅ 已上線(08a13b0)★★★★★
   由來:使用者拿當天早上的手機截圖體檢三站(本站/3D-Xiangqi/3d-chinese-chess)後,又親自到線上
