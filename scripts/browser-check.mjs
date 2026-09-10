@@ -207,10 +207,13 @@ const swipe = await tp.evaluate(async () => {
   };
 });
 ok(swipe.coarse, "觸控 context 真的是 pointer: coarse(不然量到的是滑鼠那一檔)", JSON.stringify(swipe));
-ok(swipe.rotateSpeed <= 0.5,
-  `★★ 手機的 rotateSpeed 有調降:${swipe.rotateSpeed}(退件時是預設 1.0)`, JSON.stringify(swipe));
-ok(swipe.degPer150px >= 12 && swipe.degPer150px <= 35,
-  `★★ 一根手指劃 150px ⇒ 鏡頭轉 ${swipe.degPer150px}°(退件時 ~64°;太小會變成拖不動)`,
+ok(swipe.rotateSpeed <= 0.25,
+  `★★ 手機的 rotateSpeed 有調降:${swipe.rotateSpeed}(退件時是預設 1.0;0909 先降到 0.4,`
+  + '0910 使用者第二次反映「降靈敏都過高」再砍半到 0.2)', JSON.stringify(swipe));
+/* 0910 更新門檻:0.4 那版量到約 25°,使用者仍嫌太靈敏 ⇒ 0.2 之後約 12~13°。
+   下限留 6° 是防「調過頭變成拖不動」——真的拖不動比太靈敏更難用。 */
+ok(swipe.degPer150px >= 6 && swipe.degPer150px <= 20,
+  `★★ 一根手指劃 150px ⇒ 鏡頭轉 ${swipe.degPer150px}°(退件時 ~64°,0.4 那版 ~25°;太小會變成拖不動)`,
   JSON.stringify(swipe));
 ok(swipe.elevation >= 52 && swipe.elevation <= 60,
   `★ 直向的預設俯角 = ${swipe.elevation}°(和桌機同一個)`
