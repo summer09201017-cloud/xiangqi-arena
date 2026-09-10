@@ -215,17 +215,26 @@ body.fs-active { overflow: hidden; }
   background: rgba(43, 31, 23, 0.86); border-color: #5a4536; color: #f7d9c6;
 }
 
-/* 狀態文字(💡 提示的說明就印在這裡)—— 放下緣,可以折到三行,不會被切掉 */
+/* 狀態文字(💡 提示的說明就印在這裡)。
+   2026-09-10 改成貼在工具列**正下方**、跟工具列共用摺疊開關(使用者實機退件:
+   「橫式AI提示在下方,依然擋住棋盤,建議做可以收起AI提示或AI提示移到最上方」)——
+   移到最上方 + 可收起,兩個建議用同一個機制一次滿足,不必另外加一顆鈕:
+   ①位置從「貼底部」改成「貼工具列下緣」②折工具列時它跟著一起收起
+   (見 .status-row.hint-folded 那條 + js/app.js 的 applyFsFold)。
+   ⚠ 工具列會不會換行(1 列還是 2 列)跟螢幕寬度有關,不能猜一個固定像素——
+   `--fs-toolbar-h` 是 JS 量 fsToolbar.offsetHeight 寫進來的真實高度,折疊/resize 都會重量。 */
 .stage-panel.is-fs .status-pill {
   pointer-events: none;
   position: absolute; left: max(8px, env(safe-area-inset-left));
   right: max(8px, env(safe-area-inset-right));
-  bottom: max(44px, calc(env(safe-area-inset-bottom) + 40px));
+  top: calc(var(--fs-toolbar-h, 48px) + max(6px, env(safe-area-inset-top)) + 6px);
+  bottom: auto;
   display: flex; align-items: flex-start; gap: 8px;
   color: #f6efe6; font-size: 13px; line-height: 1.55; font-weight: 700;
   background: rgba(20, 13, 9, 0.82); border-radius: 12px; padding: 8px 10px;
 }
 .stage-panel.is-fs .status-pill .dot { flex: 0 0 auto; margin-top: 5px; }
+.stage-panel.is-fs .status-row.hint-folded .status-pill { display: none; }
 
 /* 每日殘局的狀態行:上緣工具列底下 */
 .stage-panel.is-fs .daily-line {

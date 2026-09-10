@@ -35,6 +35,11 @@ class ChessAI {
             easy:   { depth: 2, ms: 150,  blunder: 0.25, slack: 90, tieRandom: true  },
             medium: { depth: 4, ms: 450,  blunder: 0,    slack: 0,  tieRandom: true  },
             hard:   { depth: 6, ms: 1100, blunder: 0,    slack: 0,  tieRandom: true  },
+            /* 大師(2026-09-10 使用者:「加強AI的能力,可以AI也是最高級或大師級嗎」)——
+               比高級再深兩層、多一倍思考時間;tieRandom:false(同分不亂挑,永遠走排序第一的
+               那手,跟提示引擎一樣「該換就換」不摻隨機)。深度 8 已經比提示檔的 7 還深一層,
+               是四檔裡搜最深、最不留情面的一檔。 */
+            master: { depth: 8, ms: 2200, blunder: 0,    slack: 0,  tieRandom: false },
             /* tradeMargin(2026-09-07 使用者拍板,四站統一):提示不建議「白做工的交換」——
                吃子要比最好的安靜手多賺半個卒(50)才推薦,否則寧可建議走位。走 _hintRoot 那條路。
                ★ 只有提示有這條;AI 對手三檔照最強下法,該換就換,棋力不受影響。

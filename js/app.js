@@ -5,7 +5,7 @@
 //   (開局譜 / 存讀檔 / 2D-3D 視角 / 長將規則)是照舊站的行為重寫的。
 //   規格書:hfpc-claude-skills/references/象棋對局場-每日殘局移植規格-2026-09-01.md
 
-const DIFFICULTY_LABEL = { easy: 'Lv.1 初級', medium: 'Lv.2 中級', hard: 'Lv.3 高級' };
+const DIFFICULTY_LABEL = { easy: 'Lv.1 初級', medium: 'Lv.2 中級', hard: 'Lv.3 高級', master: 'Lv.4 大師' };
 const SIDE_LABEL = { red: '紅方', black: '黑方' };
 
 /* backup-chain:ok —— 下面兩個鍵刻意不接匯出/匯入(這站沒有、也不打算有備份功能):
@@ -78,7 +78,7 @@ class ArenaApp {
             fsHintButton: $('fsHintButton'), fsUndoButton: $('fsUndoButton'),
             fsCameraButton: $('fsCameraButton'), fsExitButton: $('fsExitButton'),
             fsNewGameButton: $('fsNewGameButton'), fsDailyButton: $('fsDailyButton'), fsDifficultySelect: $('fsDifficultySelect'),
-            stagePanel: document.querySelector('.stage-panel'),
+            stagePanel: document.querySelector('.stage-panel'), statusRow: document.querySelector('.status-row'),
         };
     }
 
@@ -164,11 +164,22 @@ class ArenaApp {
         const FS_FOLD_KEY = 'xiangqi-arena-fs-fold-v1';
         let fsFolded = false;
         try { fsFolded = localStorage.getItem(FS_FOLD_KEY) === '1'; } catch (_) { /* 私密模式 */ }
+        /* 💡 提示文字(.status-pill)貼在工具列正下方,跟工具列共用這個摺疊開關
+           (使用者實機退件:「橫式AI提示在下方,依然擋住棋盤,建議做可以收起AI提示或AI提示
+           移到最上方」)——折了工具列,提示文字也一起藏起來;展開時位置永遠貼著工具列的
+           真實高度,不管它今天是 1 列還是換行成 2 列。工具列高度會隨螢幕寬度/折疊狀態變,
+           不能猜一個固定值,量真的 offsetHeight 寫進 CSS 變數。 */
+        const positionHintBelowToolbar = () => {
+            if (!el.stagePanel) return;
+            el.stagePanel.style.setProperty('--fs-toolbar-h', `${el.fsToolbar.offsetHeight || 0}px`);
+        };
         const applyFsFold = () => {
             el.fsToolbar.classList.toggle('folded', fsFolded);
+            if (el.statusRow) el.statusRow.classList.toggle('hint-folded', fsFolded);
             el.fsFoldButton.setAttribute('aria-expanded', String(!fsFolded));
             el.fsFoldButton.textContent = fsFolded ? '▼' : '▲';
             el.fsFoldButton.title = fsFolded ? '展開工具列' : '收起工具列(棋盤看得更清楚)';
+            requestAnimationFrame(positionHintBelowToolbar);   // 摺疊後工具列高度變了,重量一次
         };
         applyFsFold();
         el.fsFoldButton.addEventListener('click', (event) => {
@@ -177,6 +188,7 @@ class ArenaApp {
             try { localStorage.setItem(FS_FOLD_KEY, fsFolded ? '1' : '0'); } catch (_) { /* 私密模式 */ }
             applyFsFold();
         });
+        window.addEventListener('resize', () => requestAnimationFrame(positionHintBelowToolbar));
 
         /* 🔄 手機橫向自動套用全螢幕版面(2026-09-10)—— 使用者:「轉成橫式,棋盤比較大」。
            3D-Xiangqi / 3d-chinese-chess 的棋盤本來就吃滿整個視窗,轉橫式自然變大;
@@ -684,6 +696,12 @@ class ArenaApp {
         /* 版面一變,畫布尺寸就變 ⇒ 相機要重裝。renderer 自己有 ResizeObserver 看著容器,
            這裡再補一次是保險(等瀏覽器排完版的下一幀)。 */
         requestAnimationFrame(() => requestAnimationFrame(() => this.renderer.onWindowResize()));
+        /* 進出全螢幕那一刻 .fs-toolbar 從 display:none 變成畫得出來(或反過來),
+           .status-pill 貼著它的高度定位,這裡也要重量一次(不進全螢幕時量到的是 0,
+           剛進來如果不重量,提示文字會疊在工具列上面)。 */
+        requestAnimationFrame(() => {
+            el.stagePanel.style.setProperty('--fs-toolbar-h', `${el.fsToolbar.offsetHeight || 0}px`);
+        });
     }
 
     say(text) { this.el.statusText.textContent = text; }
