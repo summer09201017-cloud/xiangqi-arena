@@ -1,8 +1,25 @@
 ============================================================
 3D 象棋對局場(xiangqi-arena)— 交接說明(讀我-HANDOFF.txt)
-更新:2026-09-10(agape250 機・Sonnet 5・0909-take-over 場)🗂 全螢幕工具列可收起 + 🔄 手機轉橫式自動套用滿版
-      (SW xiangqi-3d-shell-v17、verTag v17,線上驗過)
+更新:2026-09-10(agape250 機・Sonnet 5)💡 提示點綠點沒反應 + 手機橫向提示擋棋盤
+      (SW xiangqi-3d-shell-v18、verTag v18,線上驗過)
 ============================================================
+
+★★★★★ 2026-09-10(agape250 機・Sonnet 5)💡 提示點綠點沒反應 + 📱 手機橫向提示擋棋盤 ✅ 已上線(08a13b0)★★★★★
+  由來:使用者拿當天早上的手機截圖體檢三站(本站/3D-Xiangqi/3d-chinese-chess)後,又親自到線上
+       實測回報兩件:「提示後,若點綠點,不會有反應」「手機版橫向,提示會擋到棋盤」。
+  ① 點綠點沒反應:paintHint() 以前只呼叫 renderer.highlightSquare()/highlightMoves() 畫綠圈
+     綠點,從沒把 gameLogic.selectedPiece 設起來 —— handleInteraction() 靠這個欄位才知道
+     「現在是誰被選走」,點綠點時 selectedPiece 還是 null,直接回傳 null(沒反應)。
+     同步把提示的那顆棋子在 gameLogic 裡也選起來,點綠點就會真的觸發 move(點別的合法格
+     也照樣走得動,玩家不一定要照提示走)。姊妹站 3D-Xiangqi 同一天同一條修法。
+  ② 手機橫向提示擋棋盤:.status-pill「上下本來就有空白」的假設只在直向成立 —— 橫向矮螢幕
+     棋盤本身就吃滿高度,提示文字一長(尤其「這是 N 手必勝的第一手…棄子換將位」那條尾巴)
+     會換到 3~4 行,整條蓋住最底下一兩排棋子。@media(max-height:500px) 補上把 #statusText
+     夾住最多兩行(-webkit-line-clamp:2),核心那句「建議走哪一顆」排最前面不會被裁到。
+  測試:npm test rules 45・daily 251・vertag 9・hint 6 全綠。
+  部署:npm run stage → npx wrangler pages deploy .deploy --project-name incandescent-stroopwafel-31007a --branch main;
+    線上驗過 sw v18 + verTag v18 + selectedPiece 補丁 + line-clamp 都在。
+  git 實況(交接前真的問過 git):status --short 空、HEAD 08a13b0、rev-list @{u}..HEAD = 0。
 
 ★★★★★ 2026-09-10(agape250 機・Sonnet 5・0909-take-over 場)🗂 全螢幕工具列可收起 + 🔄 手機轉橫式自動套用滿版 ✅ 已上線(f0c1d12)★★★★★
   由來:使用者拍板做「可收起選單移植」清單裡 CP 最高的一項,並追加:「我發現手機轉成橫式,棋盤比較大,

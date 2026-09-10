@@ -4,6 +4,11 @@
 
 ## 現況(**2026-09-10,agape250 機**)
 
+- 💡📱 **提示點綠點沒反應 + 手機橫向提示擋棋盤(0910 下午,SW v18)**:paintHint() 補上
+  `gameLogic.selectedPiece = {row,col}`(以前只畫圈畫點,handleInteraction 不知道有選棋子,
+  點綠點直接沒反應);`.status-pill` 在 `@media(max-height:500px)` 補 `#statusText` 兩行
+  line-clamp,長提示文字不再蓋住底線棋子。細節見 讀我-HANDOFF.txt 最新 ★ 段。
+
 - 🗂🔄 **全螢幕工具列可收起 + 手機轉橫式自動套用滿版(0910,使用者:「浮層永遠佔著版面,收起式收起時棋盤看得更清楚」+「手機轉成橫式,棋盤比較大,請讓所有象棋都能轉成橫式也能全螢幕」;SW v17,`f0c1d12`)**:
   ① `#fsToolbar` 最左邊加 `#fsFoldButton`(▲/▼),CSS `.folded > *:not(.fold-toggle){display:none}`
      一次藏掉其餘按鈕/下拉,狀態記 `localStorage`(`xiangqi-arena-fs-fold-v1`)。
