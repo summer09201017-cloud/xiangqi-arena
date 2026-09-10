@@ -243,6 +243,16 @@ body.fs-active { overflow: hidden; }
   .stage-panel.is-fs .fs-toolbar button,
   .stage-panel.is-fs .fs-toolbar select { min-height: 36px; padding: 4px 8px; font-size: 12px; }
   .stage-panel.is-fs .status-pill { font-size: 12px; padding: 6px 8px; }
+  /* 0910 補:矮螢幕下棋盤本身就吃滿高度,.status-pill 的假設「上下本來就有空白」
+     只在直向成立——橫向時提示文字一長(尤其「這是 N 手必勝的第一手…棄子換將位」那條尾巴)
+     會換到 3~4 行,整條蓋住最底下一兩排棋子(使用者實機截圖:提示擋到棋盤)。
+     這裡只夾住**文字**(不是整個 .status-pill,那是 flex 容器,裝了 .dot 圓點,
+     line-clamp 需要 -webkit-box 會把圓點排版弄爛),最多兩行、超出的用「…」代替——
+     「建議走哪一顆」永遠排最前面不會被裁到,裁掉的只是可選的尾巴說明。 */
+  .stage-panel.is-fs .status-pill #statusText {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    overflow: hidden; max-height: 2.6em;
+  }
 }
 
 /* 🗂 全螢幕工具列可收起(2026-09-10,照抄 3D-Xiangqi 的「▲ 收起」)——

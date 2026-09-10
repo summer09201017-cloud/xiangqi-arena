@@ -456,6 +456,11 @@ class ArenaApp {
         const board = this.gameLogic.getBoardState();
         const piece = board[hint.from.row][hint.from.col];
         const eat = board[hint.to.row][hint.to.col];
+        /* 0910 補：只畫圈畫點不夠——gameLogic.handleInteraction 靠 this.selectedPiece 才知道
+           「現在是誰被選走」，這裡不設它，玩家點綠點時 selectedPiece 還是 null，
+           handleInteraction 會直接回 null（沒反應）。同步把棋子「選起來」，
+           點綠點才會真的觸發 move（點別的合法格也照樣走得動，是玩家自己選的）。 */
+        this.gameLogic.selectedPiece = { row: hint.from.row, col: hint.from.col };
         this.renderer.highlightSquare(hint.from.row, hint.from.col);   // 內含 clearHighlights
         this.renderer.highlightMoves([{ row: hint.to.row, col: hint.to.col }]);
         /* 文案三態(誠實鐵則):算出必勝 / 算不出必勝 / 一般對局。
