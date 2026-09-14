@@ -48,6 +48,9 @@ npx wrangler pages deploy . --project-name incandescent-stroopwafel-31007a --bra
 
 - 專案**未連 git**,是**直傳站** ⇒ `git push` 不會上線,一定要跑上面那行。
 - 改任何檔案都要 bump `sw.js` 的 `CACHE_NAME`(cache-first,不 bump 舊使用者永遠拿舊版)。
+- ⚠ **SW 快取名單不可以有 `index.html`(0914 全艦隊修,SW v21)**:Cloudflare Pages 把 `/index.html` 308 到 `/`,
+  名單裡有它 install 就存到 redirected 回應,裝成 App 打開就 ERR_FAILED(3D-Chess 實錘)。一律只認 `./`,離線導覽也只退 `./`。
+  補丁來源:skill `static-pwa-ship/patches/patch-sw-index.mjs`;線上重演 `scripts/check-sw-nav-fleet.mjs <url>` 要 🟢。
   (現在 v4;0903 修統計打點端點 /p→/api/ping 與停留參數 s→t,見 讀我-HANDOFF 的 🩹 段)
 - 線上驗收**看內容不看狀態碼**。
 

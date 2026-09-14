@@ -2,8 +2,12 @@
 
 ★ **先讀 `README.md`**(這個 repo 為什麼存在、功能、部署雷、11 個踩過的坑)。這份只放 AI 接手要守的鐵則與現況。
 
-## 現況(**2026-09-10,agape250 機**)
+## 現況(**2026-09-14,HFP 機**)
 
+- 🩹 **拔掉「index.html 進 SW 快取名單」地雷(0914 全艦隊,SW v21 / verTag v21)**:Cloudflare Pages 把 `/index.html` 308 到 `/`,
+  名單裡有 `./index.html` ⇒ install 存到 redirected:true 的回應 ⇒ 導覽拿到它就 ERR_FAILED(3D-Chess 幻影版實錘「裝成 App 打開就無法連上」),
+  每次 bump SW 重踩。改動:`ASSETS_TO_CACHE` 拔 `./index.html`;fetch 補「離線導覽退回 `./`」(以前 hit 不到就直接 fetch,斷網開 App 必死)。
+  補丁來源 skill `static-pwa-ship/patches/patch-sw-index.mjs`(--cf --write);線上重演 `scripts/check-sw-nav-fleet.mjs` 🟢。**永遠不要把 index.html 加回名單。**
 - 💡📱 **提示點綠點沒反應 + 手機橫向提示擋棋盤(0910 下午,SW v18)**:paintHint() 補上
   `gameLogic.selectedPiece = {row,col}`(以前只畫圈畫點,handleInteraction 不知道有選棋子,
   點綠點直接沒反應);`.status-pill` 在 `@media(max-height:500px)` 補 `#statusText` 兩行

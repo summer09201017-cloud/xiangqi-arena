@@ -1,7 +1,15 @@
 ============================================================
 3D 象棋對局場(xiangqi-arena)— 交接說明(讀我-HANDOFF.txt)
-更新:2026-09-10(agape250 機・Sonnet 5)🖐 手機旋轉靈敏度第二輪 0.4→0.2(v20,線上驗過)
+更新:2026-09-14(HFP 機・Fable 5.1)🩹 拔掉「index.html 進 SW 快取名單」地雷(全艦隊六棋類站同修;SW v21 / verTag v21)
+// 原 更新:2026-09-10(agape250 機・Sonnet 5)🖐 手機旋轉靈敏度第二輪 0.4→0.2(v20,線上驗過)
 ============================================================
+
+★★★★★ 2026-09-14(HFP 機・Fable 5.1)🩹 拔掉「index.html 進 SW 快取名單」地雷 ✅(SW v21 / verTag v21)★★★★★
+  由來:3D-Chess 幻影版實機「裝成 App 打開就無法連上 / ERR_FAILED」。病根:Cloudflare Pages 把 /index.html 308 到 /,
+    SW 名單裡有 './index.html' ⇒ install 存到 redirected:true 的回應 ⇒ 導覽拿到它瀏覽器拒收;每次 bump SW 重踩一次。使用者拍板全艦隊修。
+  改動:sw.js ASSETS_TO_CACHE 拔 './index.html'、v20→v21(補丁 static-pwa-ship/patches/patch-sw-index.mjs --cf --write);
+    fetch 補離線導覽退路 caches.match('./')(本站以前完全沒退路,斷網開 App 必死);verTag v21 白話一段;manifest 早已是 ./ 沒動。
+  驗:npm test 全綠(vertag 9/9);線上 check-sw-nav-fleet.mjs 🟢(開 /index.html 兩次不 ERR_FAILED、快取無 redirected、離線回殼層)。
 
 ★★★★★ 2026-09-10(agape250 機・Sonnet 5)🖐 手機旋轉靈敏度第二輪 0.4→0.2 ✅ 已上線(63ba0bf,v20)★★★★★
   由來:使用者「3款象棋手機旋轉降靈敏都過高,請修正」——0909 才從預設 1.0 降到 0.4
