@@ -281,6 +281,31 @@ await page.waitForTimeout(400);
 ok(await page.evaluate(() => window.app.renderer.viewMode === "3d"
   && window.app.renderer.boardSpin === 0), "切回 3D:旋轉歸零、滑鼠可轉");
 
+/* ── 🎥 視角工具列(view-kit,2026-09-20 六款 3D 棋類統一:預設三段 + 滑桿 + 換邊 + 重置)── */
+const vk = (sel) => page.locator("#viewKitMount " + sel);
+const vkVal = (sel) => page.evaluate((s) => Number(document.querySelector("#viewKitMount " + s).value), sel);
+ok(await vk("[data-vk-view]").count() === 3, "視角工具列有三顆預設鈕(斜俯視 / 正俯視 / 對局視角)");
+ok(await vk("[data-vk-range='yaw']").count() === 1 && await vk("[data-vk-range='pitch']").count() === 1,
+  "有「水平旋轉」+「俯視角度」兩條滑桿");
+await vk("[data-vk-flip]").click();
+await page.waitForTimeout(700);   // 補間 320ms
+ok(await vkVal("[data-vk-range='yaw']") === 180, "按 🔃 換邊 → 水平旋轉滑桿 = 180°", String(await vkVal("[data-vk-range='yaw']")));
+await vk("[data-vk-view='flat']").click();
+await page.waitForTimeout(700);
+ok(await vkVal("[data-vk-range='pitch']") === 88
+  && await page.evaluate(() => document.querySelector("#viewKitMount [data-vk-view='flat']").getAttribute("aria-pressed") === "true"),
+  "按「正俯視」→ 俯視角度滑桿 = 88°、那顆鈕亮起");
+await vk("[data-vk-reset]").click();
+await page.waitForTimeout(300);
+{
+  const y = await vkVal("[data-vk-range='yaw']"), p = await vkVal("[data-vk-range='pitch']");
+  ok(y === 0 && p >= 54 && p <= 60, "按 🎯 重置視角 → 水平 0°、俯視回開場 56° 左右", `yaw=${y} pitch=${p}`);
+}
+await page.selectOption("#viewSelect", "2d");
+ok(await page.evaluate(() => document.getElementById("viewKitMount").classList.contains("hidden")), "切到 2D:視角工具列藏起來(2D 不能轉)");
+await page.selectOption("#viewSelect", "3d");
+ok(await page.evaluate(() => !document.getElementById("viewKitMount").classList.contains("hidden")), "切回 3D:視角工具列回來");
+
 /* ── 存讀檔 ── */
 await page.locator("#saveButton").click();
 await page.waitForTimeout(300);

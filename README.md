@@ -83,6 +83,7 @@ js/save.js          盤面快照式存讀檔
 js/ai.js            minimax + alpha-beta(移植)
 js/renderer.js      Three.js 渲染 + 2D/3D + fitCamera(移植後大幅擴充)
 js/app.js           全部接線
+js/view-kit.js      🎥 視角工具列(skill board3d-kit/assets/view-kit.js 的共用複本,不要在這裡改)
 test/rules.mjs      引擎驗算 45 項(長將/悔棋/開局譜/每日旁路)
 test/daily.mjs      題庫驗算 129 項(擺位/決定性/開著長將規則實打)
 scripts/browser-check.mjs  真瀏覽器冒煙 37 項

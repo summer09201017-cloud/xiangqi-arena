@@ -2,8 +2,18 @@
 
 ★ **先讀 `README.md`**(這個 repo 為什麼存在、功能、部署雷、11 個踩過的坑)。這份只放 AI 接手要守的鐵則與現況。
 
-## 現況(**2026-09-14,HFP 機**)
+## 現況(**2026-09-20,agape250 機**)
 
+- 🎥 **視角工具列統一(0920 agape250 機・Fable 5.1,SW v22 / verTag v22)**:使用者拍板「兩邊都做。讓六款 3D 棋類的視角工具列長一樣:
+  預設三段 + 滑桿微調 + 換邊 + 重置」。`js/view-kit.js` 是 skill `board3d-kit/assets/view-kit.js` 的**共用複本(不要在本站改它,改正本再 cp)**;
+  它是 ES module,本站其餘是傳統 script ⇒ index.html 底下一小段 `<script type="module">` 橋接成 `window.ViewKit`,
+  `app.js` 的 `ensureViewKit()` 用 `orbitAdapter({THREE, camera, controls, reset})` 接 OrbitControls,掛在側欄「視角模式」底下的 `#viewKitMount`。
+  ★ **只在 3D 模式建 adapter**(它建立當下讀 `camera.up`;本站的 up 要到 fitCamera 才設成 (0,0,1),2D 還會隨 boardSpin 轉)⇒ 2D 整塊 `.hidden`,切回 3D 再 `sync()`。
+  側欄舊「重置視角」鈕拿掉(kit 自帶 🎯);全螢幕工具列 `#fsCameraButton` 改成「🎯 重置」+ 新增 `#fsViewButton`「👁 視角」循環三段預設。
+  視角純本機顯示:不進存檔/偏好、不碰對局邏輯;換邊只轉相機不換執方。yaw 0 = 開場方向、pitch = 俯視角度(開場 56°)。
+  browser-check +7 項(三顆預設鈕、兩條滑桿、換邊=180°、正俯視=88° 亮燈、重置回 0°/56°、2D 藏/3D 回)⇒ **56/0**;npm test 全綠。
+
+## 前一輪現況(**2026-09-14,HFP 機**)
 - 🩹 **拔掉「index.html 進 SW 快取名單」地雷(0914 全艦隊,SW v21 / verTag v21)**:Cloudflare Pages 把 `/index.html` 308 到 `/`,
   名單裡有 `./index.html` ⇒ install 存到 redirected:true 的回應 ⇒ 導覽拿到它就 ERR_FAILED(3D-Chess 幻影版實錘「裝成 App 打開就無法連上」),
   每次 bump SW 重踩。改動:`ASSETS_TO_CACHE` 拔 `./index.html`;fetch 補「離線導覽退回 `./`」(以前 hit 不到就直接 fetch,斷網開 App 必死)。

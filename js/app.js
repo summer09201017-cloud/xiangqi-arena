@@ -65,7 +65,7 @@ class ArenaApp {
             sideSelect: $('sideSelect'), viewSelect: $('viewSelect'),
             difficultySelect: $('difficultySelect'), openingSelect: $('openingSelect'),
             newGameButton: $('newGameButton'), hintButton: $('hintButton'), undoButton: $('undoButton'),
-            cameraButton: $('cameraButton'), saveButton: $('saveButton'), loadButton: $('loadButton'),
+            viewKitMount: $('viewKitMount'), saveButton: $('saveButton'), loadButton: $('loadButton'),
             rotateLeftButton: $('rotateLeftButton'), rotateRightButton: $('rotateRightButton'),
             installButton: $('installButton'), installHint: $('installHint'),
             dailyButton: $('dailyButton'),
@@ -76,7 +76,7 @@ class ArenaApp {
             // ⛶ 全螢幕棋盤
             fsButton: $('fsButton'), fsButton2: $('fsButton2'), fsToolbar: $('fsToolbar'), fsFoldButton: $('fsFoldButton'),
             fsHintButton: $('fsHintButton'), fsUndoButton: $('fsUndoButton'),
-            fsCameraButton: $('fsCameraButton'), fsExitButton: $('fsExitButton'),
+            fsCameraButton: $('fsCameraButton'), fsViewButton: $('fsViewButton'), fsExitButton: $('fsExitButton'),
             fsNewGameButton: $('fsNewGameButton'), fsDailyButton: $('fsDailyButton'), fsDifficultySelect: $('fsDifficultySelect'),
             stagePanel: document.querySelector('.stage-panel'), statusRow: document.querySelector('.status-row'),
         };
@@ -127,10 +127,7 @@ class ArenaApp {
         el.newGameButton.addEventListener('click', () => this.startGame());
         el.hintButton.addEventListener('click', () => this.showHint());
         el.undoButton.addEventListener('click', () => this.undo());
-        el.cameraButton.addEventListener('click', () => {
-            this.renderer.resetView();
-            this.say('視角已重置。');
-        });
+        // 🎥 視角:側欄的「重置視角」鈕已由 view-kit 工具列(#viewKitMount)取代,見下面 ensureViewKit()
 
         /* ⛶ 全螢幕棋盤(0902 使用者:「下棋的畫面太小」)。
            工具列那三顆一律**轉呼叫側欄原本的鈕**(click()),不另寫一份邏輯 ——
@@ -140,7 +137,8 @@ class ArenaApp {
         el.fsExitButton.addEventListener('click', () => this.exitFullscreen());
         el.fsHintButton.addEventListener('click', () => el.hintButton.click());
         el.fsUndoButton.addEventListener('click', () => el.undoButton.click());
-        el.fsCameraButton.addEventListener('click', () => el.cameraButton.click());
+        el.fsCameraButton.addEventListener('click', () => this.resetView());
+        el.fsViewButton.addEventListener('click', () => this.cycleView());
         // 0905 v8:全螢幕裡也能重新開局 / 進每日殘局 / 換難度(使用者反映每次都得先離開全螢幕才能換設定)。
         //   一律「代按右側欄的原鈕」,不另寫一套流程 —— 邏輯只有一份,全螢幕只是另一個入口。
         el.fsNewGameButton.addEventListener('click', () => el.newGameButton.click());
@@ -255,6 +253,7 @@ class ArenaApp {
         el.viewSelect.addEventListener('change', () => {
             this.viewMode = el.viewSelect.value;
             this.renderer.setViewMode(this.viewMode);
+            this.syncViewKit();
             this.savePrefs(); this.render();
         });
 
@@ -320,6 +319,7 @@ class ArenaApp {
     bootScene() {
         this.renderer.initScene(this.gameLogic.getBoardState());
         this.renderer.setViewMode(this.viewMode);
+        this.syncViewKit();   // 🎥 3D 才掛視角工具列(adapter 要在相機擺好之後才建)
         this.renderer.animate();
         this.hideOverlay();
         this.render();
@@ -551,6 +551,52 @@ class ArenaApp {
         this.bootScene();
         this.say('已讀檔,對局已恢復。');
         this.maybeAiMove();
+    }
+
+    /* ═══ 🎥 視角工具列(2026-09-20 六款 3D 棋類統一:預設三段 + 滑桿微調 + 換邊 + 重置)═══
+       js/view-kit.js 是 skill board3d-kit/assets/view-kit.js 的共用複本 —— 不要在這站改它,改正本再 cp 過來。
+       ★ 只在 3D 模式建 adapter:orbitAdapter 建立當下讀 camera.up,而本站的 up 要到 fitCamera 才設成 (0,0,1),
+         2D 模式的 up 還會跟著 boardSpin 轉 ⇒ 開場若是 2D 就等切回 3D 再建;2D 期間整塊 .hidden。
+       視角是純本機顯示:不進存檔、不進偏好、不碰對局邏輯;換邊只轉相機,不換執方。 */
+    ensureViewKit() {
+        if (this.viewKit || this.viewMode !== '3d') return;
+        const VK = window.ViewKit;
+        const r = this.renderer;
+        if (!VK) {
+            // module 橋接還沒跑到(理論上不會,保險):等它喊一聲再試一次
+            document.addEventListener('viewkit-ready', () => this.syncViewKit(), { once: true });
+            return;
+        }
+        if (!r.camera || !r.controls || !this.el.viewKitMount) return;
+        const adapter = VK.orbitAdapter({ THREE, camera: r.camera, controls: r.controls, reset: () => r.resetView() });
+        this.viewKit = VK.mountViewKit(this.el.viewKitMount, adapter, {
+            title: '',   // 上面那格「視角模式」就是標題,不重複
+            onAction: (name, d) => {
+                if (name === 'view') this.say(`視角:${d.label}。`);
+                else if (name === 'flip') this.say('棋盤已換邊(轉 180°)。');
+                else if (name === 'reset') this.say('視角已重置。');
+            },
+        });
+    }
+
+    syncViewKit() {
+        const is3d = this.viewMode === '3d';
+        this.ensureViewKit();
+        if (this.el.viewKitMount) this.el.viewKitMount.classList.toggle('hidden', !is3d);
+        if (this.viewKit && is3d) this.viewKit.sync();
+        if (this.el.fsViewButton) this.el.fsViewButton.disabled = !is3d;   // 2D 沒有預設視角可切
+    }
+
+    resetView() {
+        if (this.viewKit && this.viewMode === '3d') { this.viewKit.reset(); return; }   // kit 會 say('視角已重置。')
+        this.renderer.resetView();   // 2D:把左右轉的 boardSpin 歸零
+        this.say('視角已重置。');
+    }
+
+    cycleView() {
+        if (this.viewMode !== '3d') { this.say('請先切換到 3D 視角,再切換預設視角。'); return; }
+        this.ensureViewKit();
+        if (this.viewKit) this.viewKit.cycleView();
     }
 
     spin(delta) {

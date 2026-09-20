@@ -326,6 +326,15 @@ button.primary:hover:not(:disabled) { background: #85351f; border-color: #85351f
 
 .hidden { display: none !important; }
 
+/* ── 🎥 視角工具列(view-kit,2026-09-20 六款 3D 棋類統一)──
+   kit 的外觀走 CSS 變數,這裡把它套成本站的紙色主題;結構與尺寸(≥44px 鈕、兩條滑桿)在 js/view-kit.js 內嵌的樣式,不要在這裡覆寫。 */
+.view-kit-mount {
+  margin-bottom: 10px;
+  --vk-bg: #fffdfa; --vk-line: var(--line); --vk-fg: var(--ink);
+  --vk-accent: var(--accent); --vk-accent-fg: #fff;
+}
+.view-kit-mount .vk-btn:hover { background: #fdf3ea; border-color: var(--accent-soft); filter: none; }
+
 /* ── 窄螢幕:資訊欄移到棋盤下面 ── */
 @media (max-width: 960px) {
   .board-layout { grid-template-columns: minmax(0, 1fr); }
