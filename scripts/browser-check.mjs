@@ -382,6 +382,178 @@ const opens = beacons.filter((b) => /[?&]g=xiangqi-arena(&|$)/.test(b.u));
 ok(opens.length > 0 && opens.every((b) => b.s === 200), "📡 開啟打點:伺服器收下(200)", JSON.stringify(opens));
 ok(!beacons.some((b) => b.s === 404), "📡 沒有任何打點被伺服器退回 404(端點/參數寫對了)", JSON.stringify(beacons.filter((b) => b.s !== 200)));
 
+
+/* ══════ 🐾 動物對手(2026-09-28,skill animal-opponent-kit;照 3D-Xiangqi 的 🐾 段改選擇器)══════
+   檔案側對賬 → 真操作(下拉 + 重新開局)開一局中級 → 坐對面 / 鐵則遍歷 / 頭在畫面裡 / 凳子落地 / 名牌帶臉
+   → 桌機全螢幕:臉沒被工具列 / 狀態文字蓋到(≥1000px 畫布從工具列底下開始)→ 手機橫向(自動全螢幕)/ 直向:頭在畫面裡
+   → 讓位縮盤 ≤ 25% → 走一手等牠回手(figs.log 有 think + place)→ 姿勢手動推時間 → 🔃 換邊仍坐對面 → 對局視角
+   → 三段開關 / 2D 收起 → 難度換人 → 人聲 runtime → 每日 = 🦉。★ Z-up:pos 回世界 XY,相機在 -Y 時牠在 +Y。 */
+console.log("—— 🐾 動物對手 ——");
+{
+  const fs = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath, pathToFileURL } = await import("node:url");
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const { VOICE_FILES } = await import(pathToFileURL(join(root, "js", "voicePhrases.js")).href);
+  const vdir = join(root, "voice");
+  const mp3 = fs.existsSync(vdir) ? fs.readdirSync(vdir).filter((f) => f.endsWith(".mp3")).sort() : [];
+  const want = [...VOICE_FILES].sort();
+  ok(mp3.join() === want.join(), `🗣 voice/ 有 ${mp3.length} 支 mp3,跟詞庫 ${want.length} 句一一對應`);
+  const sw = fs.readFileSync(join(root, "sw.js"), "utf8");
+  const missing = mp3.filter((f) => !sw.includes(`"./voice/${f}"`));
+  ok(missing.length === 0 && sw.includes('"./voice/manifest.json"'), `🗣 sw.js 清單含 manifest + 每支 mp3(gen-voice 照目錄重生)${missing.length ? ":漏 " + missing.join(",") : ""}`);
+  let manifestOk = false;
+  try { const mf = JSON.parse(fs.readFileSync(join(vdir, "manifest.json"), "utf8")); manifestOk = mp3.length > 0 && mp3.every((f) => mf[f.replace(/\.mp3$/, "")] === "voice/" + f); } catch { /* 沒烤 */ }
+  ok(manifestOk, "🗣 manifest.json 的鍵值跟目錄一致");
+  const tiny = mp3.filter((f) => fs.statSync(join(vdir, f)).size < 2048);
+  ok(tiny.length === 0, `🗣 每支 mp3 > 2KB(空檔 = 烤失敗)${tiny.length ? ":" + tiny.join(",") : ""}`);
+  const webSpeech = fs.readdirSync(join(root, "js")).filter((f) => f.endsWith(".js") && fs.readFileSync(join(root, "js", f), "utf8").includes("speech" + "Synthesis"));
+  ok(webSpeech.length === 0, `🗣 js/ 裡沒有 Web Speech 機器聲${webSpeech.length ? ":" + webSpeech.join(",") : ""}`);
+  const kit = join(process.env.USERPROFILE || process.env.HOME || "", ".claude", "skills", "animal-opponent-kit", "assets");
+  if (fs.existsSync(kit)) {
+    const drift = [["animals.js", "animals.js"], ["voice.js", "voice.js"], ["three-shim.js", "three-global-shim.js"]]
+      .filter(([site, asset]) => fs.readFileSync(join(root, "js", site), "utf8") !== fs.readFileSync(join(kit, asset), "utf8")).map(([site]) => site);
+    ok(drift.length === 0, `🐾 引擎三支與 skill 同一份${drift.length ? ":漂移 " + drift.join(",") : ""}`);
+  }
+}
+await page.setViewportSize({ width: 1366, height: 900 });
+await page.selectOption("#sideSelect", "red");
+await page.waitForTimeout(400);
+await page.selectOption("#petSelect", "voice");
+await page.selectOption("#difficultySelect", "medium");
+await page.locator("#newGameButton").click();
+await page.waitForFunction(() => window.app.opponent && window.app.opponent.kind === "cat" && !window.app.daily, null, { timeout: 5000 });
+await page.waitForTimeout(500);
+const pet0 = await page.evaluate(() => {
+  const O = window.app.opponent, f = O.figure;
+  let neck = 0, eyes = 0, ears = 0, brows = 0, mouth = 0;
+  f.group.traverse((o) => { if (o.userData.neck) neck++; if (o.userData.eye) eyes++; if (o.userData.ear) ears++; if (o.userData.brow) brows++; if (o.userData.mouth) mouth++; });
+  return { ...O.probe(), neck, eyes, ears, brows, mouth, chip: document.getElementById("petChip").textContent,
+    chipShown: !document.getElementById("petChip").classList.contains("hidden"), petOn: document.body.classList.contains("pet-on"),
+    capsule: !!window.THREE.CapsuleGeometry, fsSel: document.getElementById("fsPetSelect").options.length };
+});
+ok(pet0.figure && pet0.visible && pet0.kind === "cat" && pet0.pos.y > 0, `🐾 中級 ⇒ 🐱 橘貓坐在對面(黑方那一側,世界 ${JSON.stringify(pet0.pos)},scale ${pet0.scale})`);
+ok(pet0.capsule, "🐾 three-shim 補上了 r128 沒有的 CapsuleGeometry");
+ok(pet0.neck === 1 && pet0.eyes === 2 && pet0.ears === 2 && pet0.brows === 2 && pet0.mouth === 1, "🐾 人物鐵則遍歷:脖子 1、眼 2、耳 2、眉 2、嘴 1");
+ok(pet0.head.inside, `🐾 桌機:頭頂在畫面裡(NDC ${pet0.head.x}, ${pet0.head.y})`);
+ok(pet0.stoolZ <= pet0.floorZ + 0.05, `🐾 凳子不懸空(凳底 z ${pet0.stoolZ} ≤ 板底 ${pet0.floorZ})`);
+ok(pet0.chipShown && /^🐱/.test(pet0.chip) && pet0.petOn && pet0.fsSel === 3, `🐾 名牌帶動物(${pet0.chip})、body.pet-on、全螢幕工具列也有三段下拉`);
+const hudHits = (box) => [...document.querySelectorAll("#fsToolbar, .status-pill, #turnChip, #petChip, #fsButton")].filter((el) => {
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 && !(r.right < box.l || r.left > box.r || r.bottom < box.t || r.top > box.b);
+}).map((el) => el.id || el.className);
+const faceAt = () => page.evaluate((fn) => { const hits = eval(fn); const p = window.app.opponent.probe(); return { box: p.headBox, head: p.head, hits: hits(p.headBox) }; }, `(${hudHits.toString()})`);
+const faceDesk = await faceAt();
+ok(faceDesk.hits.length === 0, `🐾 桌機:牠的臉沒被任何浮層蓋到(頭框 ${JSON.stringify(faceDesk.box)}${faceDesk.hits.length ? ";蓋到 " + faceDesk.hits.join(",") : ""})`);
+await page.locator("#fsButton").click();
+await page.waitForTimeout(1200);
+const faceFs = await faceAt();
+ok(faceFs.head.inside && faceFs.hits.length === 0, `🐾 桌機全螢幕:頭在畫面裡(${faceFs.head.x}, ${faceFs.head.y})、臉沒被工具列 / 狀態文字蓋到${faceFs.hits.length ? ":" + faceFs.hits.join(",") : ""}`);
+await page.locator("#fsExitButton").click();
+await page.waitForTimeout(600);
+await page.setViewportSize({ width: 844, height: 390 });
+await page.waitForTimeout(1200);
+const faceLand = await faceAt();
+ok(faceLand.head.inside, `🐾 手機橫向(自動全螢幕):頭在畫面裡(${faceLand.head.x}, ${faceLand.head.y})${faceLand.hits.length ? ";工具列蓋到 " + faceLand.hits.join(",") + "(小螢幕接受,折起 ▲ 就看得到)" : ""}`);
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(1200);
+const facePort = await faceAt();
+ok(facePort.head.inside, `🐾 手機直向:頭在畫面裡(${facePort.head.x}, ${facePort.head.y})`);
+await page.setViewportSize({ width: 1366, height: 900 });
+await page.waitForTimeout(1200);
+await page.evaluate(() => { if (window.app.isFullscreen()) window.app.exitFullscreen(); });
+await page.waitForTimeout(600);
+const shrink = await page.evaluate(() => {
+  const r = window.app.renderer;
+  const px = (row, col) => { const g = r.getGridPosition(row, col); const v = new THREE.Vector3(g.x, g.y, 0).project(r.camera); const { w, h } = r.containerSize(); return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h }; };
+  const width = () => { const a = px(0, 0), b = px(0, 8); return Math.hypot(b.x - a.x, b.y - a.y); };
+  const on = width();
+  window.app.opponent.setMode("off"); const off = width();
+  window.app.opponent.setMode("voice");
+  return { on: Math.round(on), off: Math.round(off), ratio: +(on / off).toFixed(3) };
+});
+/* 讓位上限是「相機距離 1.28 倍」;這裡量的是**近邊**(紅方底線)的寬,透視下近邊縮得比 1/1.28 多一點 ⇒ 1366×900 的畫布(16:10)頂到上限時量到 0.74。
+   3D-Xiangqi 同一個盤在 1000×720 量到 0.76。門檻 0.72 = 上限 + 透視的份;再低就是上限被人改了。 */
+ok(shrink.ratio >= 0.72 && shrink.ratio <= 1.0001, `🐾 為牠讓位但棋盤最多縮 28%(近邊寬:開 ${shrink.on}px / 關 ${shrink.off}px = ${shrink.ratio};距離上限 1.28 倍)`);
+/* 走一手(紅炮二平五)等牠回手:think 在牠開算時、place 在牠落子後 —— 看 figs.log,不是 grep 程式碼 */
+const moved = await page.evaluate(async () => {
+  const a = window.app;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  a.handleSquareClick(2, 1); a.handleSquareClick(2, 4);
+  for (let i = 0; i < 60 && !(!a.aiThinking && a.gameLogic.currentPlayer === "red" && a.opponent.figs.log.some((e) => e.kind === "place")); i++) await sleep(250);
+  await sleep(200);
+  return { turn: a.gameLogic.currentPlayer, log: a.opponent.figs.log.map((e) => e.kind), focus: !!a._focus };
+});
+ok(moved.turn === "red" && moved.log.includes("think") && moved.log.includes("place") && moved.focus, `🐾 事件真的接到(figs.log):${moved.log.join(",")}`);
+const pose = await page.evaluate(() => {
+  const O = window.app.opponent, f = O.figure, F = O.figs;
+  const said = []; const o = O.voice.say.bind(O.voice); O.voice.say = (a, e, d) => { said.push(a + ":" + e); return o(a, e, d); };
+  O.react("win", "win"); F.update(0.4);
+  const up = { armL: +f.arms[0].rotation.x.toFixed(2), armR: +f.arms[1].rotation.x.toFixed(2), open: f.mouthOpen.visible };
+  F.update(3.5); F.update(0.5);
+  const back = { armL: +f.arms[0].rotation.x.toFixed(2), smile: f.smile.visible };
+  O.react("lose", "lose"); F.update(0.4);
+  const sad = { pitch: +f.head.rotation.x.toFixed(2), smileZ: +f.smile.rotation.z.toFixed(2) };
+  F.update(3.5); F.update(0.5);
+  O.react("think", null); F.update(0.4);
+  const think = { armR: +f.arms[1].rotation.x.toFixed(2), tilt: +f.head.rotation.z.toFixed(2) };
+  O.cancel(); F.update(1);
+  O.voice.say = o;
+  return { up, back, sad, think, said };
+});
+ok(pose.up.armL < -2.2 && pose.up.armR < -2.2 && pose.up.open, `🐾 win:雙手高舉 + 張嘴(${JSON.stringify(pose.up)})`);
+ok(Math.abs(pose.back.armL + 1.2) < 0.15 && pose.back.smile, `🐾 反應完回休息姿勢、笑臉回來(${JSON.stringify(pose.back)})`);
+ok(pose.sad.pitch > 0.3 && pose.sad.smileZ < 1.6, `🐾 lose:低頭 + 苦臉(${JSON.stringify(pose.sad)})`);
+ok(pose.think.armR < -1.9 && pose.think.tilt < -0.05, `🐾 think:手托腮、頭歪(${JSON.stringify(pose.think)})`);
+ok(pose.said.join(" ") === "cat:win cat:lose", `🗣 同一個入口也叫了人聲:${pose.said.join(" ")}`);
+/* 🔃 換邊(真的按側欄工具列那顆):相機轉到 +Y 那側 ⇒ 牠要坐到 -Y(還是你對面),頭還在畫面裡。
+   ★ 這一條順手抓到既有 bug:adapter 只建一次、而每局 initScene 都是新相機 ⇒ 「重新開局」後工具列轉的是丟掉的舊相機(滑桿動、畫面不動)。
+     上面 view-kit 那段是在第一局驗的所以一直綠;這裡是「重新開局」之後,相機真的要轉。 */
+const camBefore = await page.evaluate(() => window.app.renderer.camera.position.y);
+const beforeFlip = await page.evaluate(() => window.app.opponent.probe().pos);
+await page.locator("#viewKitMount [data-vk-flip]").click();
+await page.waitForTimeout(900);
+const afterFlip = await page.evaluate(() => { window.app.opponent.update(0.016); return window.app.opponent.probe(); });
+const camAfter = await page.evaluate(() => window.app.renderer.camera.position.y);
+ok(Math.sign(camBefore) !== Math.sign(camAfter), `🎥 重新開局之後 🔃 換邊真的轉了相機(y ${camBefore.toFixed(1)} → ${camAfter.toFixed(1)};adapter 跟著新相機重建)`);
+ok(Math.sign(beforeFlip.y) !== Math.sign(afterFlip.pos.y) && afterFlip.head.inside, `🐾 🔃 換邊後牠還是坐你對面(y ${beforeFlip.y} → ${afterFlip.pos.y})、頭在畫面裡(${afterFlip.head.x}, ${afterFlip.head.y})`);
+await page.locator('#viewKitMount [data-vk-view="sit"]').click();
+await page.waitForTimeout(900);
+const sitPet = await page.evaluate(() => window.app.opponent.probe().head);
+ok(sitPet.inside, `🐾 對局視角(34°):頭頂在畫面裡(${sitPet.x}, ${sitPet.y})`);
+await page.locator("#viewKitMount [data-vk-reset]").click();
+await page.waitForTimeout(600);
+const toggled = await page.evaluate(() => {
+  const O = window.app.opponent;
+  O.setMode("off"); const off = { visible: O.figure.group.visible, saved: localStorage.getItem("xiangqi-arena-pet"), chip: document.body.classList.contains("pet-on") };
+  O.setMode("mute"); const mute = { visible: O.figure.group.visible, voiceOn: O.voiceOn };
+  O.setMode("voice");
+  return { off, mute };
+});
+ok(toggled.off.visible === false && toggled.off.saved === "off", `🐾 關掉 ⇒ 隱藏、localStorage 記 off(${JSON.stringify(toggled.off)})`);
+ok(toggled.mute.visible === true && toggled.mute.voiceOn === false, `🐾 不出聲 ⇒ 還坐著、不唸(${JSON.stringify(toggled.mute)})`);
+await page.selectOption("#viewSelect", "2d");
+await page.waitForTimeout(500);
+const in2d = await page.evaluate(() => { window.app.opponent.update(0.016); const O = window.app.opponent; return { on: O.on, visible: O.figure.group.visible, fit: O.fitPoints().length, chipHidden: document.getElementById("petChip").classList.contains("hidden") }; });
+await page.selectOption("#viewSelect", "3d");
+await page.waitForTimeout(500);
+const back3d = await page.evaluate(() => { window.app.opponent.update(0.016); const O = window.app.opponent; return { on: O.on, visible: O.figure.group.visible, inside: O.probe().head.inside }; });
+ok(!in2d.on && in2d.visible === false && in2d.fit === 0 && in2d.chipHidden && back3d.on && back3d.visible && back3d.inside, `🐾 2D 視角收起(不畫、不讓位、名牌藏)、切回 3D 坐回來(${JSON.stringify(in2d)} → ${JSON.stringify(back3d)})`);
+await page.selectOption("#difficultySelect", "master");
+await page.waitForTimeout(400);
+const master = await page.evaluate(() => ({ kind: window.app.opponent.kind, chip: document.getElementById("petChip").textContent }));
+ok(master.kind === "owl" && /^🦉/.test(master.chip), `🐾 難度換 Lv.4 ⇒ 對面立刻換 🦉(${master.chip})`);
+await page.selectOption("#difficultySelect", "medium");
+await page.waitForFunction(() => window.app.voice && window.app.voice.ready(), null, { timeout: 10000 }).catch(() => {});
+const v = await page.evaluate(() => ({ ready: window.app.voice.ready(), has: window.app.voice.has("owl", "check"), yes: window.app.voice.say("cat", "win"), no: window.app.voice.say("cat", "nope") }));
+ok(v.ready && v.has && v.yes === true && v.no === false, `🗣 人聲 runtime:manifest 載到、cat-win 送去放、沒烤的不唸(${JSON.stringify(v)})`);
+await page.locator("#dailyButton").click();
+await page.waitForFunction(() => window.app.daily && window.app.opponent.kind === "owl", null, { timeout: 5000 });
+const owl = await page.evaluate(() => ({ ...window.app.opponent.probe(), chip: document.getElementById("petChip").textContent }));
+ok(owl.kind === "owl" && owl.visible && owl.head.inside && /^🦉/.test(owl.chip), `🐾 每日殘局 ⇒ 🦉 貓頭鷹守黑方(${owl.chip};頭 ${owl.head.x}, ${owl.head.y})`);
+await page.locator("#newGameButton").click();
+await page.waitForTimeout(600);
+
 ok(errors.length === 0, "整場零 pageerror", errors.join(" | ").slice(0, 240));
 
 await browser.close();

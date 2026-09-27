@@ -1,8 +1,24 @@
 ============================================================
 3D 象棋對局場(xiangqi-arena)— 交接說明(讀我-HANDOFF.txt)
-更新:2026-09-14(HFP 機・Fable 5.1)🩹 拔掉「index.html 進 SW 快取名單」地雷(全艦隊六棋類站同修;SW v21 / verTag v21)
+更新:2026-09-28(HFP 機・Fable 5.1・0928-3D動物對手-象棋家族-家裡 場的 fork)🐾 動物對手坐到你對面 + 🐛 重開局後視角工具列轉錯相機(SW v23 / verTag v23)
+// 原 更新:2026-09-14(HFP 機・Fable 5.1)🩹 拔掉「index.html 進 SW 快取名單」地雷(全艦隊六棋類站同修;SW v21 / verTag v21)
 // 原 更新:2026-09-10(agape250 機・Sonnet 5)🖐 手機旋轉靈敏度第二輪 0.4→0.2(v20,線上驗過)
 ============================================================
+
+★★★★★ 2026-09-28(HFP 機・Fable 5.1・0928-3D動物對手-象棋家族-家裡 場的 fork)🐾 動物對手坐到你對面 ✅(SW v23 / verTag v23)★★★★★
+  由來:0927 使用者看了 3D 麻將的三隻動物說「超級可愛」⇒ 固化 skill animal-opponent-kit;象棋家族六站同一場接,本站照範式站 3D-Xiangqi(67ff0ab,同血統)逐項對應。
+  改動(細節見 CLAUDE.md 現況 0928 段):
+    · 新檔 js/animals.js、js/voice.js、js/three-shim.js(= skill assets 同一份)、js/opponent.js(本站接線:Z-up 父群組 / 坐相機對面 / 讓位 / 2D 收起)、
+      js/voicePhrases.js(4 隻 × 8 句,跟 3D-Xiangqi 同一份)、scripts/gen-voice.mjs(skill 同一份)、voice/(32 mp3 + manifest)。
+    · index.html:import map(three → ./js/three-shim.js,第一個 module script 之前)+ PetKit 橋接 + 側欄「🐾 對手動物」下拉 + 全螢幕 #fsPetSelect + 狀態列 #petChip + verTag v23。
+    · js/renderer.js:floorZ、fitCamera 3D 分支的 fitExtra(dir) 二分法讓位(上限 1.28)、animate() 先 cancel 舊 rAF + onFrame(dt)。
+    · js/app.js:initPet()(等 pet-kit-ready 補坐)、petKind()、bootScene 重掛 + 坐、applyMove 回呼分 byHuman / AI 反應、maybeAiMove 前 think()、
+      checkGameState 的 win / lose 閂鎖、render 的 petChip + body.pet-on + 兩個下拉同步、難度一改立刻換人;**ensureViewKit 相機換了就重建 adapter**(既有 bug)。
+    · sw.js v23(+5 支 js + voice 段 33 項)、scripts/stage.mjs SHIP +voice、css(pet-chip / pet-note / 全螢幕讓臉)、package.json +voice。
+  ★ 兩條踩到:(a) 全螢幕工具列橫跨整寬、貼上緣,正好壓在牠的臉上 ⇒ ≥1000px 讓畫布從工具列底下開始(棋盤少 ~5% 高),手機橫向讓不起、接受(折起 ▲ 就看得到);
+    (b) 🐛 view-kit adapter 只建一次而每局相機是新的 ⇒ 重開局後「換邊」滑桿動、畫面不動 —— 驗「換邊後牠還坐對面」才抓到,順手修了(0920 的冒煙在第一局驗所以一直綠)。
+  驗:npm test 全綠(rules 45 / daily 251 / vertag 9 / hint 6);browser-check 88/0(🐾 段 +32,含「重開後換邊真的轉相機」);線上同一支 88/0;
+    四張截圖目視(桌機 / 桌機全螢幕 / 手機橫向 / 直向)。線上 https://incandescent-stroopwafel-31007a.pages.dev sw v23 已驗。
 
 ★★★★★ 2026-09-14(HFP 機・Fable 5.1)🩹 拔掉「index.html 進 SW 快取名單」地雷 ✅(SW v21 / verTag v21)★★★★★
   由來:3D-Chess 幻影版實機「裝成 App 打開就無法連上 / ERR_FAILED」。病根:Cloudflare Pages 把 /index.html 308 到 /,

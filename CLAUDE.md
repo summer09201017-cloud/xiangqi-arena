@@ -2,7 +2,36 @@
 
 ★ **先讀 `README.md`**(這個 repo 為什麼存在、功能、部署雷、11 個踩過的坑)。這份只放 AI 接手要守的鐵則與現況。
 
-## 現況(**2026-09-20,agape250 機**)
+## 現況(**2026-09-28,HFP 機**)
+
+- 🐾 **動物對手坐到你對面(0928,HFP 機・Fable 5.1・0928-3D動物對手-象棋家族-家裡 場的 fork;SW v23、verTag v23)**:skill `animal-opponent-kit`
+  的活例(正本 majiang3d、範本 gomoku3d、老站範式 3D-Xiangqi 67ff0ab —— 本站跟它同血統,接法逐項對應)。
+  Lv.1 🐰 / Lv.2 🐱 / Lv.3 🐻 / Lv.4 🦉;📅 每日殘局 🦉 守黑方;本站永遠人對 AI ⇒ 每局都坐;**2D 視角收起**(正俯視看不到牠:不畫、不讓位、名牌藏)。
+  ① `js/animals.js`(引擎)/ `js/voice.js`(人聲 runtime)/ `js/three-shim.js`(全域 THREE → ESM 具名匯出 + 補 CapsuleGeometry)三支與 skill assets
+    **同一份,不在這裡改**(browser-check 🐾 有逐位元對賬);本站接線 `js/opponent.js`、唸稿 `js/voicePhrases.js`(跟 3D-Xiangqi 同一份象棋事件表:think / check / wow / win / lose / chat1~3)。
+  ② ★ 本站是 **CDN 全域 THREE r128 + 傳統 script**,引擎是 ES module `import 'three'` ⇒ index.html 加一張 **import map**(`three` → `./js/three-shim.js`,
+    放在第一個 `<script type="module">` 之前)+ 模組橋接 `window.PetKit`(跟 view-kit 同一招);app.js `initPet()`:module 比建構子晚跑 ⇒ 等 `pet-kit-ready` 再補坐。
+  ③ ★ 世界 **Z-up** ⇒ 動物掛在轉 +90°(繞 X)的父群組 `petRoot` 底下;不用引擎的 lookAt,自己設 `group.rotation.y` 朝盤心;座位永遠在相機對面
+    (每幀量相機方位角,2° 一格重擺;🔃 換邊跟著坐到 -Y;人執黑時 AI 是紅方,牠一樣坐你對面)。大小 0.215 倍、取景點 = 頭頂 + EAR_ROOM 0.55(耳尖不被切)。
+  ④ 相機讓位:`renderer.fitCamera` 3D 分支改成「先算方向與基準距離,再用 `fitExtra(dir)` 二分法拉遠到取景點入鏡,上限 1.28 倍」;2D 分支一字不動。
+    `renderer.floorZ`(=板底 -4);`renderer.onFrame(dt)` 每幀回呼;`animate()` 先 cancel 舊 rAF 再排(每局 bootScene 再叫 animate 以前會疊 rAF 鏈)。
+    1366×900 畫布量到近邊寬比 0.74(頂到上限;透視下近邊縮得比 1/1.28 多一點,門檻 0.72)。
+  ⑤ 反應跟狀態文字同分岔(這站沒音效):`maybeAiMove` 起算 think(人聲每三手一次)/ `applyMove` 回呼裡 byHuman ⇒ 吃牠子・將牠軍 gasp+「哇」、
+    AI ⇒ 將你軍 hop+「將軍!」否則 place / `checkGameState` 贏 win・輸 lose(閂鎖 `_petEnded`,bootScene 歸零);等你太久閒聊(15s / 30s / 一回合兩句)。
+  ⑥ UI:側欄「AI 強度」多一格「🐾 對手動物」下拉(會說話 / 不出聲 / 關;localStorage `xiangqi-arena-pet`,不進存檔 / 偏好)、全螢幕工具列 `#fsPetSelect`
+    內容從側欄複製(跟難度下拉同一招)、狀態列多一顆名牌 `#petChip`「🐱 橘貓」(全螢幕藏);**難度一改對面立刻換人**(下一手就是牠在下)。
+    **全螢幕讓臉**:桌機 / 平板(≥1000px)`body.pet-on` 讓畫布從工具列底下開始(`top: var(--fs-toolbar-h)`,棋盤少 ~5% 高)、狀態文字縮到內容寬靠左;
+    手機橫向太矮讓不起 ⇒ 接受工具列蓋到牠(折起 ▲ 就看得到;smoke 只驗頭在畫面裡)。
+  ⑦ 人聲:`npm run voice`(= `gen-voice.mjs --phrases js/voicePhrases.js --out voice --sw sw.js`)⇒ `voice/` 32 mp3 + manifest,sw.js `voice:begin~end` 段照目錄重生;
+    `scripts/stage.mjs` SHIP 加 `voice`。
+  ⑧ 🐛 順手抓到既有 bug:`ensureViewKit` 的 adapter 只建一次,而每局 `initScene` 都是**新的** camera / controls ⇒ 「重新開局」之後視角工具列轉的是
+    上一局丟掉的舊相機(滑桿動、畫面不動、零錯誤;0920 那條 view-kit 冒煙是在第一局驗的所以一直綠)。改成相機換了就 destroy + 重建(`_vkCamera`)。
+  ⑨ 驗:browser-check +32(檔案對賬 / 引擎同 skill / 坐對面 / 鐵則遍歷 / 頭在畫面裡 ×4(桌機・桌機全螢幕・手機橫向・直向)/ 全螢幕臉沒被蓋 / 讓位 /
+    figs.log think+place / 姿勢手動推時間 / 重開後換邊真的轉相機 / 換邊坐對面 / 對局視角 / 三段 / 2D 收起 / 難度換人 / 人聲 runtime / 每日 🦉)⇒ **88/0**,線上同一支同分;
+    npm test 全綠(rules 45 / daily 251 / vertag 9 / hint 6);四張截圖目視(桌機・桌機全螢幕・手機橫向・直向)。
+  ⚠ 姿勢一律 `opponent.figs.update(0.4)` 手動推時間;`opponent.probe()` 的 headBox 是頁面座標(畫布不在 (0,0)),驗浮層蓋臉用。
+
+## 前一輪現況(**2026-09-20,agape250 機**)
 
 - 🎥 **視角工具列統一(0920 agape250 機・Fable 5.1,SW v22 / verTag v22)**:使用者拍板「兩邊都做。讓六款 3D 棋類的視角工具列長一樣:
   預設三段 + 滑桿微調 + 換邊 + 重置」。`js/view-kit.js` 是 skill `board3d-kit/assets/view-kit.js` 的**共用複本(不要在本站改它,改正本再 cp)**;
@@ -116,6 +145,9 @@
 - 待做見 `roadmap.md`;給另一台機的在 `讀我-HANDOFF.txt`。
 
 ## 一檔一責
+
+🐾 動物對手(0928):`js/animals.js` / `js/voice.js` / `js/three-shim.js` = skill animal-opponent-kit/assets **同一份(不在這裡改;browser-check 逐位元對賬)**;
+`js/opponent.js` 本站接線(誰坐 / Z-up 父群組 / 坐相機對面 / 讓位取景點 / 2D 收起 / 閒聊)、`js/voicePhrases.js` 四隻唸稿;`scripts/gen-voice.mjs` 烤 mp3 → `voice/`(npm run voice)。
 
 README「檔案」段是正本。全螢幕這一版落在:`js/app.js`(`enterFullscreen` / `exitFullscreen` / `applyFullscreenClass`,
 工具列鈕轉呼叫側欄原鈕)、`css/style.css`(`.is-fs` / `.pseudo-fs` / `.fs-toolbar` / `.fs-btn`)、

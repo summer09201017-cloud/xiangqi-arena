@@ -656,6 +656,9 @@ class ChessRenderer {
         });
     }
     
+    /* 🐾 動物凳子要落到哪(世界 Z):棋盤底面(板厚 4、盤面在 z=0)。這站沒有桌子,凳腳伸到板底就算「落地」。 */
+    get floorZ() { return -this.BOARD_THICKNESS; }
+
     // 畫布真正的可用尺寸(容器,不是視窗)。容器還沒佈局好時給一個不會除以 0 的保底值。
     containerSize() {
         const w = this.container.clientWidth || 640;
@@ -702,8 +705,29 @@ class ChessRenderer {
                ⚠ 這一條**不是** 0909「旋轉太靈敏」的病因 —— 那個病因是 rotateSpeed 預設 1.0
                  (見上面 controls 那段)。我一度以為是「相機貼著極點」,量完才知道
                  這支的公轉軸是 Y 不是 Z,0908 那版離公轉極點反而更遠。兩件事要分開講。 */
-            this.camera.position.set(0, -dist * 0.52, dist * 0.78);
+            /* 🐾 額外取景點(0928,動物對手;照 3D-Xiangqi / gomoku3d 的 fitExtra):站方掛 `renderer.fitExtra = (dir) => [Vector3…]`
+               (對手的頭頂),沿同一個方向用二分法拉遠到這些點都進畫面(邊 0.98 / 0.97)—— 但**上限 1.28 倍**(棋盤最多縮 ~22%):
+               棋盤是主角,對手只是配角;讓不下就讓牠被切一點頭,不讓棋盤變小到點不到。fitExtra 回空陣列 = 跟以前完全一樣。 */
+            const dir = new THREE.Vector3(0, -0.52, 0.78).normalize();
+            const base = Math.hypot(dist * 0.52, dist * 0.78);
+            let d = base;
             this.camera.up.set(0, 0, 1);
+            const extra = typeof this.fitExtra === 'function' ? this.fitExtra(dir) : null;
+            if (extra && extra.length) {
+                const cam = this.camera;
+                const inside = (dd) => {
+                    cam.position.set(dir.x * dd, dir.y * dd, dir.z * dd);
+                    cam.lookAt(0, 0, 0);
+                    cam.updateMatrixWorld(true);
+                    return extra.every((p) => { const v = p.clone().project(cam); return Math.abs(v.x) <= 0.98 && Math.abs(v.y) <= 0.97 && v.z < 1; });
+                };
+                const maxD = base * 1.28;
+                if (!inside(base)) {
+                    if (!inside(maxD)) d = maxD;
+                    else { let lo = base, hi = maxD; for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2; if (inside(mid)) hi = mid; else lo = mid; } d = hi; }
+                }
+            }
+            this.camera.position.set(dir.x * d, dir.y * d, dir.z * d);
         }
         this.camera.lookAt(0, 0, 0);
         if (this.controls) {
@@ -749,7 +773,15 @@ class ChessRenderer {
     }
     
     animate(time) {
+        /* ⚠ 每局 bootScene 都會叫一次 animate():以前沒 cancel 舊的那條 rAF 鏈 ⇒ 重開幾局就有幾條迴圈在跑(畫面照樣、只是浪費 GPU)。
+           0928 接動物才注意到 —— 兩條迴圈會讓 onFrame 的 dt 疊加、動物動作變兩倍快。先 cancel 再排下一幀,永遠只有一條。 */
+        if (this.animationId) cancelAnimationFrame(this.animationId);
         this.animationId = requestAnimationFrame(this.animate.bind(this));
+        /* 🐾 每幀回呼(app 掛 opponent.update):dt 上限 0.05(切回前景那一幀不要跳一大步) */
+        const now = performance.now();
+        const dt = Math.min(0.05, Math.max(0, (now - (this._lastFrameAt || now)) / 1000));
+        this._lastFrameAt = now;
+        if (typeof this.onFrame === 'function') { try { this.onFrame(dt); } catch (e) { console.warn('onFrame', e); } }
         
         // 處理動畫
         if (this.animatingPieces.length > 0) {

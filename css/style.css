@@ -352,3 +352,21 @@ button.primary:hover:not(:disabled) { background: #85351f; border-color: #85351f
 }
 .ver-fold > summary:hover { text-decoration: underline; }
 .ver-fold[open] > summary { margin-bottom: 2px; }
+
+/* ══════════ 🐾 動物對手(2026-09-28,skill animal-opponent-kit)══════════
+   側欄「AI 強度」多一格三段下拉(會說話 / 不出聲 / 關);狀態列多一顆「🐱 橘貓」名牌;全螢幕工具列也有同一個下拉。
+   牠坐在相機對面 = 畫布正上方正中央。平常版面畫布上沒有浮層,不用讓;
+   全螢幕(.is-fs)的工具列貼著上緣、狀態文字在它底下、兩者都橫跨整寬 ⇒ 桌機 / 平板(≥1000px)讓畫布從工具列底下開始
+   (棋盤少 ~5% 高、臉永遠露出來);手機橫向太矮,讓不起 ⇒ 接受工具列蓋到牠(折起工具列 ▲ 就看得到)。
+   狀態文字則一律縮到內容寬、靠左,不再橫跨整排(它的 rect 橫跨整排就一定蓋臉)。 */
+.pet-chip {
+  font-size: 13px; font-weight: 700; color: #4b3a2c;
+  background: #fdf3ea; border: 1px solid #f0d6c9;
+  border-radius: 999px; padding: 4px 12px;
+}
+.stage-panel.is-fs .pet-chip { display: none; }     /* 全螢幕看得到牠本人,名牌不用 */
+.pet-note { font-size: 12px; color: var(--ink-soft); margin: -4px 0 10px; line-height: 1.5; }
+body.pet-on .stage-panel.is-fs .status-pill { right: auto; max-width: 46%; }
+@media (min-width: 1000px) {
+  body.pet-on .stage-panel.is-fs .canvas-shell { top: var(--fs-toolbar-h, 48px); }
+}

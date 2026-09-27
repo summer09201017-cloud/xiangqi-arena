@@ -7,9 +7,11 @@
     "test": "node test/rules.mjs && node test/daily.mjs && node test/vertag.mjs && node test/hint.mjs",
     "serve": "node scripts/serve.mjs",
     "check": "node scripts/browser-check.mjs",
-    "stage": "node scripts/stage.mjs"
+    "stage": "node scripts/stage.mjs",
+    "voice": "node scripts/gen-voice.mjs --phrases js/voicePhrases.js --out voice --sw sw.js"
   },
   "devDependencies": {
+    "msedge-tts": "^2.0.8",
     "playwright-core": "^1.62.1"
   }
 }

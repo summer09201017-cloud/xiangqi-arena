@@ -54,6 +54,7 @@ class ArenaApp {
         this.fillSelects();
         this.loadPrefs();
         this.bindEvents();
+        this.initPet();
         this.startGame();
     }
 
@@ -78,6 +79,7 @@ class ArenaApp {
             fsHintButton: $('fsHintButton'), fsUndoButton: $('fsUndoButton'),
             fsCameraButton: $('fsCameraButton'), fsViewButton: $('fsViewButton'), fsExitButton: $('fsExitButton'),
             fsNewGameButton: $('fsNewGameButton'), fsDailyButton: $('fsDailyButton'), fsDifficultySelect: $('fsDifficultySelect'),
+            petSelect: $('petSelect'), fsPetSelect: $('fsPetSelect'), petChip: $('petChip'),   // 🐾
             stagePanel: document.querySelector('.stage-panel'), statusRow: document.querySelector('.status-row'),
         };
     }
@@ -240,6 +242,7 @@ class ArenaApp {
 
         el.difficultySelect.addEventListener('change', () => {
             this.difficulty = el.difficultySelect.value;
+            if (this.opponent) this.opponent.seat(this.petKind());   // 🐾 難度換了,對面就換人(下一手就是牠在下)
             this.savePrefs(); this.render();
         });
         el.openingSelect.addEventListener('change', () => {
@@ -282,6 +285,60 @@ class ArenaApp {
         this.renderer.onPieceClick = (row, col) => this.handleSquareClick(row, col);
     }
 
+    /* ═══ 🐾 動物對手(2026-09-28,skill animal-opponent-kit;正本 majiang3d、範本 gomoku3d、老站範式 3D-Xiangqi)═══
+       引擎 js/animals.js、人聲 js/voice.js 是 ES module,本站接線 js/opponent.js;這支是傳統 script ⇒ 經 window.PetKit 橋接
+       (index.html 底下那段,跟 view-kit 同一招)。module script 比這支晚跑 ⇒ 建構時橋還沒好,等 pet-kit-ready 再補坐。
+       反應跟狀態文字同分岔(這站沒有音效):牠想棋 think / 走子 place / 將你的軍 hop+「將軍」/ 被吃子・被將軍 gasp+「哇」/ 贏 win / 輸 lose;
+       等你太久閒聊(opponent.update 計時)。純觀感:不進 raycast、不進 AI、不影響棋力;2D 視角收起。 */
+    initPet() {
+        this.opponent = null; this.voice = null; this._focus = null; this._petEnded = false;
+        this._reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        const el = this.el;
+        const build = () => {
+            const PK = window.PetKit;
+            if (!PK || this.opponent) return;
+            this.voice = PK.createVoice({ muted: () => false });   // 這站沒有 🔊 音效開關 ⇒ 只看 🐾 三段
+            this.opponent = new PK.Opponent(this.renderer, this.voice);
+            /* 側欄下拉 + 全螢幕工具列下拉(內容從側欄複製,跟難度下拉同一招:邏輯只有一份) */
+            if (el.fsPetSelect && el.petSelect) { el.fsPetSelect.innerHTML = el.petSelect.innerHTML; }
+            const apply = (v) => { this.opponent.setMode(v); this.render(); };
+            if (el.petSelect) el.petSelect.addEventListener('change', () => apply(el.petSelect.value));
+            if (el.fsPetSelect) el.fsPetSelect.addEventListener('change', () => apply(el.fsPetSelect.value));
+            /* 每幀:牠的 idle / 反應 / 看著最後動的那顆子;waiting = 輪到你、牠在等(閒聊計時只在這時走) */
+            this.renderer.onFrame = (dt) => {
+                const waiting = !this.aiThinking && !this.gameLogic.isGameOver && this.gameLogic.currentPlayer === this.playerSide();
+                this.opponent.update(dt, { focus: this._focus, waiting, reduced: this._reduced });
+            };
+            this.renderer.container.addEventListener('pointerdown', () => this.opponent.noteInput());
+            document.addEventListener('keydown', () => this.opponent.noteInput());
+            /* 橋接比開局晚到(建構子就 startGame 了)⇒ 補坐 */
+            if (this.renderer.scene) { this.opponent.attach(this.renderer.scene); this.opponent.seat(this.petKind()); }
+            this.render();
+        };
+        if (window.PetKit) build(); else window.addEventListener('pet-kit-ready', build, { once: true });
+    }
+    /** 這一局該坐哪一隻:每日 🦉,不然照難度(Lv.1 🐰 / Lv.2 🐱 / Lv.3 🐻 / Lv.4 🦉) */
+    petKind() { return window.PetKit ? window.PetKit.animalFor(Boolean(this.daily), this.difficulty) : null; }
+    _focusOn(row, col) {
+        const p = this.renderer.getGridPosition(row, col);
+        this._focus = new THREE.Vector3(p.x, p.y, this.renderer.PIECE_HEIGHT);
+    }
+    /** 你走完一手:吃了牠的子、或將了牠的軍 ⇒ 牠「哇」一聲 */
+    _petAfterPlayerMove(row, col, captured) {
+        if (!this.opponent || !this.opponent.kind) return;
+        this._focusOn(row, col);
+        if (this.gameLogic.isGameOver) return;
+        if (captured || this.gameLogic.isInCheck(this.aiSide())) this.opponent.react('gasp', 'wow');
+    }
+    /** 牠走完一手:將你的軍 ⇒ 跳起來喊「將軍」;不然只是放子的手勢 */
+    _petAfterAiMove(row, col, captured) {
+        if (!this.opponent || !this.opponent.kind) return;
+        this._focusOn(row, col);
+        if (this.gameLogic.isGameOver) return;
+        if (this.gameLogic.isInCheck(this.playerSide())) this.opponent.react('hop', 'check');
+        else this.opponent.react('place', null);
+    }
+
     /* ═══ 開局 ═══ */
     startGame() {
         this.daily = null;
@@ -318,6 +375,9 @@ class ArenaApp {
 
     bootScene() {
         this.renderer.initScene(this.gameLogic.getBoardState());
+        /* 🐾 每局的 scene 是新的 ⇒ 動物重掛;誰坐由每日 / 難度決定 */
+        this._petEnded = false; this._focus = null;
+        if (this.opponent) { this.opponent.attach(this.renderer.scene); this.opponent.seat(this.petKind()); }
         this.renderer.setViewMode(this.viewMode);
         this.syncViewKit();   // 🎥 3D 才掛視角工具列(adapter 要在相機擺好之後才建)
         this.renderer.animate();
@@ -350,12 +410,14 @@ class ArenaApp {
     }
 
     applyMove(fromRow, fromCol, toRow, toCol, byHuman) {
+        const victim = this.gameLogic.getBoardState()[toRow][toCol];   // 🐾 吃子了嗎(要在 executeMove 之前看)
         this.gameLogic.executeMove(fromRow, fromCol, toRow, toCol);
         if (byHuman && this.daily) this.humanMoves += 1;
         this.hint = null;                       // 局面變了,舊建議作廢
         this.renderer.movePiece(fromRow, fromCol, toRow, toCol, () => {
             this.renderer.updateBoardState(this.gameLogic.getBoardState());
             this.render();
+            if (byHuman) this._petAfterPlayerMove(toRow, toCol, !!victim); else this._petAfterAiMove(toRow, toCol, !!victim);
             if (this.checkGameState()) return;
             this.maybeAiMove();
         });
@@ -371,6 +433,7 @@ class ArenaApp {
 
         this.aiThinking = true;
         this.render();
+        if (this.opponent) this.opponent.think();   // 🐾 手托腮、頭歪、看著盤面(每三手唸一次「讓我想想」)
         // 讓瀏覽器先把「AI 思考中」畫出來,再進同步搜尋
         setTimeout(() => {
             let move = null;
@@ -559,9 +622,14 @@ class ArenaApp {
          2D 模式的 up 還會跟著 boardSpin 轉 ⇒ 開場若是 2D 就等切回 3D 再建;2D 期間整塊 .hidden。
        視角是純本機顯示:不進存檔、不進偏好、不碰對局邏輯;換邊只轉相機,不換執方。 */
     ensureViewKit() {
-        if (this.viewKit || this.viewMode !== '3d') return;
+        if (this.viewMode !== '3d') return;
         const VK = window.ViewKit;
         const r = this.renderer;
+        /* 🐛 0928 修(接動物對手驗「🔃 換邊後牠還是坐你對面」才抓到):每局 bootScene 的 initScene 都是**新的** camera / controls,
+           而 adapter 以前只建一次 ⇒ 「重新開局」之後工具列轉的是上一局那顆已經丟掉的相機 —— 滑桿會動、畫面不動、零錯誤。
+           相機換了就整組重建(mountViewKit 有 destroy)。 */
+        if (this.viewKit && this._vkCamera === r.camera) return;
+        if (this.viewKit) { try { this.viewKit.destroy(); } catch (_) { /* noop */ } this.viewKit = null; }
         if (!VK) {
             // module 橋接還沒跑到(理論上不會,保險):等它喊一聲再試一次
             document.addEventListener('viewkit-ready', () => this.syncViewKit(), { once: true });
@@ -569,6 +637,7 @@ class ArenaApp {
         }
         if (!r.camera || !r.controls || !this.el.viewKitMount) return;
         const adapter = VK.orbitAdapter({ THREE, camera: r.camera, controls: r.controls, reset: () => r.resetView() });
+        this._vkCamera = r.camera;
         this.viewKit = VK.mountViewKit(this.el.viewKitMount, adapter, {
             title: '',   // 上面那格「視角模式」就是標題,不重複
             onAction: (name, d) => {
@@ -610,6 +679,12 @@ class ArenaApp {
     /* ═══ 勝負與每日戰績 ═══ */
     checkGameState() {
         if (!this.gameLogic.isGameOver) return false;
+        /* 🐾 牠贏了跳、輸了低頭(每局一次;動畫回呼可能讓本函式跑兩次) */
+        if (this.opponent && this.opponent.kind && !this._petEnded) {
+            this._petEnded = true;
+            if (this.gameLogic.winner === this.aiSide()) this.opponent.react('win', 'win', 250);
+            else this.opponent.react('lose', 'lose', 250);
+        }
 
         if (this.daily && this.gameLogic.winner === 'red') {
             if (this.dailySaved) return true;
@@ -756,6 +831,12 @@ class ArenaApp {
         const el = this.el;
         const turn = this.gameLogic.currentPlayer;
         el.turnChip.textContent = this.aiThinking ? 'AI 思考中' : `${SIDE_LABEL[turn]}行棋`;
+        /* 🐾 對手是誰就寫誰(帶牠的臉);body.pet-on 給 CSS 讓臉用;兩個下拉跟著目前模式 */
+        const O = this.opponent;
+        const petOn = !!(O && O.on);
+        if (el.petChip) { el.petChip.classList.toggle('hidden', !petOn); el.petChip.textContent = petOn ? `${O.emoji} ${O.name}` : ''; }
+        document.body.classList.toggle('pet-on', petOn);
+        if (O) { if (el.petSelect) el.petSelect.value = O.mode; if (el.fsPetSelect) el.fsPetSelect.value = O.mode; }
         el.tipText.textContent = this.gameLogic.currentPlayer === this.playerSide()
             ? '先點你的棋子,再點要移動到的位置。'
             : '等待 AI 落子。';

@@ -17,7 +17,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, ".deploy");
 
 // 只有這些會上線。新增要上線的檔案時記得補這裡**和** sw.js 的 ASSETS_TO_CACHE。
-const SHIP = ["index.html", "manifest.webmanifest", "sw.js", "css", "js", "icons"];
+const SHIP = ["index.html", "manifest.webmanifest", "sw.js", "css", "js", "icons", "voice"];   // voice/ = 🐾 動物人聲 mp3 + manifest(0928)
 
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
