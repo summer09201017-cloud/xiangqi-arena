@@ -4,11 +4,12 @@
   "private": true,
   "description": "3D 象棋對局場(重建版)—— Three.js xiangqi PWA",
   "scripts": {
-    "test": "node test/rules.mjs && node test/daily.mjs && node test/vertag.mjs && node test/hint.mjs",
+    "test": "node test/rules.mjs && node test/daily.mjs && node test/vertag.mjs && node test/hint.mjs && node test/dice.mjs",
     "serve": "node scripts/serve.mjs",
     "check": "node scripts/browser-check.mjs",
     "stage": "node scripts/stage.mjs",
-    "voice": "node scripts/gen-voice.mjs --phrases js/voicePhrases.js --out voice --sw sw.js"
+    "voice": "node scripts/gen-voice.mjs --phrases js/voicePhrases.js --out voice --sw sw.js",
+    "smoke:dice": "node scripts/smoke-dice.mjs"
   },
   "devDependencies": {
     "msedge-tts": "^2.0.8",

@@ -2,7 +2,23 @@
 
 ★ **先讀 `README.md`**(這個 repo 為什麼存在、功能、部署雷、11 個踩過的坑)。這份只放 AI 接手要守的鐵則與現況。
 
-## 現況(**2026-09-28,HFP 機**)
+## 現況(**2026-09-30,HFP 機**)
+
+- 🎲 **擲骰 / 擲硬幣決定先後(0930,HFP 機・Opus 5.5・0930-象棋擲骰-家裡 場;SW v24、verTag v24)**:skill `dice-coin-toss` 骰6 的活例。
+  選單本來就有紅 / 黑 ⇒ S 級:「玩家執方」多 `dice` / `coin` 兩個值。`sideChoice`(選單值,進偏好)與 `humanSide`(這局真的執哪色,進存檔)分開;
+  `startGame()` 變 async,選了擲骰就先擺盤再 `await pickSide()`(每局含再來一局都重擲;大的 / 硬幣正面 = 你執紅)。每日殘局不擲、一律執紅。
+  `js/dice-toss.js` = skill 正本複本(不在這裡改);app.js 是傳統 script ⇒ `import(new URL('js/dice-toss.js', document.baseURI))`。
+  對手名字照難度拿(`PetKit.ANIMALS[petKind()]`)。`app.diceRng` 是測試鉤子(⚠ 不能照 chess5 換 Math.random —— 動物每幀都在用,佇列會被吃光)。
+  🐛 順手補執黑才撞得到的洞(都是既有 bug):① 悔到開局只退得了電腦那手 ⇒ 輪到電腦卻沒人叫它(`undo()` 尾巴補 `maybeAiMove()`)
+  ② **電腦那手被排兩次**:`aiThinking` 在落子動畫**之前**就歸零,動畫回呼才叫 `maybeAiMove` ⇒ 這段空檔按新局 / 悔棋就排出第二手,
+     第二手拿紅子在黑方回合走(紀錄標 black、動的是紅炮)。三道守門:`newToken()` 局號(AI timeout 與動畫回呼都比對)、`maybeAiMove` 已在想就不排、
+     timeout 裡再確認輪到誰。突變實測:**任一道單獨拿掉都還綠(互相重疊),三道全拿掉才紅** ⇒ 三道都留著。
+  ③ `newToken()` 順便收掉沒關的 `.dt-ov`(浮層蓋得住滑鼠、蓋不住 Tab+Enter 按後面的「重新開局」⇒ 疊兩層,舊的永遠蓋住棋盤)。
+  ⚠ 已知沒做:執黑時相機**不會**轉到黑方那邊(原本就這樣,有 🔃 換邊可用)。
+  驗:`npm test` + `test/dice.mjs` 5 項;`npm run smoke:dice` **21/0**(擲骰骰面 == 點數、擲骰中不收點、你先 / 電腦先、悔到開局、連按新局、硬幣、鍵盤疊浮層、重新整理、每日不擲);
+  `npm run check` 88/0。
+
+## 前一輪現況(**2026-09-28,HFP 機**)
 
 - 🐾 **動物對手坐到你對面(0928,HFP 機・Fable 5.1・0928-3D動物對手-象棋家族-家裡 場的 fork;SW v23、verTag v23)**:skill `animal-opponent-kit`
   的活例(正本 majiang3d、範本 gomoku3d、老站範式 3D-Xiangqi 67ff0ab —— 本站跟它同血統,接法逐項對應)。

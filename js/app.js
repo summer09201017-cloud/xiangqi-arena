@@ -7,6 +7,12 @@
 
 const DIFFICULTY_LABEL = { easy: 'Lv.1 初級', medium: 'Lv.2 中級', hard: 'Lv.3 高級', master: 'Lv.4 大師' };
 const SIDE_LABEL = { red: '紅方', black: '黑方' };
+const SIDE_CHOICES = ['red', 'black', 'dice', 'coin'];   // 🎲 選單上「玩家執方」的四個值
+
+/* 🎲 dice-toss.js 是 ES module(skill dice-coin-toss 正本的複本,站內不改);這支是傳統 script ⇒ 用時才 import。
+   路徑用 document.baseURI 解成絕對網址(跟 3dchess-an 同一招),不賭瀏覽器拿哪個當相對基準。 */
+let diceMod = null;
+const loadDice = () => diceMod || (diceMod = import(new URL('js/dice-toss.js', document.baseURI).href));
 
 /* backup-chain:ok —— 下面兩個鍵刻意不接匯出/匯入(這站沒有、也不打算有備份功能):
    · xiangqi-daily-v1    = 這台裝置上每日殘局的最佳步數,掉了就是重解一次,不是教出來的資料
@@ -40,6 +46,11 @@ class ArenaApp {
         this.difficulty = 'medium';
         this.openingBook = 'all';
         this.humanSide = 'red';
+        /* 🎲 sideChoice = 選單上選的(red / black / dice / coin);humanSide = 這一局真的執哪一色。
+           ⚠ 'dice' / 'coin' 絕不流進對局邏輯 —— 每局開局前由 pickSide() 解成 red / black。 */
+        this.sideChoice = 'red';
+        this.gameToken = 0;         // 局號:電腦那手 / 擲骰回來時局已換 ⇒ 丟掉
+        this.tossing = false;       // 擲骰浮層開著時棋盤不收點
         this.viewMode = '3d';
 
         this.daily = null;          // null = 一般對局;{ key, index, set, puzzle } = 今天第 N 題
@@ -107,11 +118,13 @@ class ArenaApp {
         if (DIFFICULTY_LABEL[prefs.difficulty]) this.difficulty = prefs.difficulty;
         if (OPENING_BOOKS[prefs.openingBook]) this.openingBook = prefs.openingBook;
         if (prefs.humanSide === 'black' || prefs.humanSide === 'red') this.humanSide = prefs.humanSide;
+        // 舊偏好沒有 sideChoice ⇒ 沿用 humanSide(原本就只有紅 / 黑兩個選項)
+        this.sideChoice = SIDE_CHOICES.includes(prefs.sideChoice) ? prefs.sideChoice : this.humanSide;
         if (prefs.viewMode === '2d' || prefs.viewMode === '3d') this.viewMode = prefs.viewMode;
 
         this.el.difficultySelect.value = this.difficulty;
         this.el.openingSelect.value = this.openingBook;
-        this.el.sideSelect.value = this.humanSide;
+        this.el.sideSelect.value = this.sideChoice;
         this.el.viewSelect.value = this.viewMode;
     }
 
@@ -119,7 +132,7 @@ class ArenaApp {
         try {
             localStorage.setItem(PREFS_KEY, JSON.stringify({
                 difficulty: this.difficulty, openingBook: this.openingBook,
-                humanSide: this.humanSide, viewMode: this.viewMode,
+                humanSide: this.humanSide, sideChoice: this.sideChoice, viewMode: this.viewMode,
             }));
         } catch (_) { /* 私密模式:記不住偏好不影響下棋 */ }
     }
@@ -250,7 +263,8 @@ class ArenaApp {
             this.savePrefs(); this.render();
         });
         el.sideSelect.addEventListener('change', () => {
-            this.humanSide = el.sideSelect.value;
+            this.sideChoice = el.sideSelect.value;
+            if (this.sideChoice === 'red' || this.sideChoice === 'black') this.humanSide = this.sideChoice;
             this.savePrefs(); this.startGame();
         });
         el.viewSelect.addEventListener('change', () => {
@@ -340,7 +354,16 @@ class ArenaApp {
     }
 
     /* ═══ 開局 ═══ */
-    startGame() {
+    /* 🎲 換局:局號 +1,上一局沒關的擲骰浮層一起收掉。
+       浮層蓋住整頁,但鍵盤 Tab 到後面的「重新開局」按 Enter 還是叫得進來 ⇒ 不收的話舊浮層永遠蓋著棋盤。 */
+    newToken() {
+        this.tossing = false;
+        document.querySelectorAll('.dt-ov').forEach((ov) => ov.remove());
+        return ++this.gameToken;
+    }
+
+    async startGame() {
+        const token = this.newToken();
         this.daily = null;
         this.dailySaved = false;
         this.humanMoves = 0;
@@ -348,8 +371,40 @@ class ArenaApp {
         this.aiThinking = false;
         this.gameLogic.initGame();
         this.bootScene();
+        /* 🎲 選了擲骰 / 擲硬幣 ⇒ 每局(含「再來一局」)重擲;棋盤先擺好,浮層蓋在上面擲 */
+        if (this.sideChoice === 'dice' || this.sideChoice === 'coin') {
+            this.tossing = true;
+            this.render();
+            const side = await this.pickSide();
+            if (token !== this.gameToken) return;   // 擲的時候局已經換了 ⇒ 這次作廢
+            this.tossing = false;
+            this.humanSide = side;
+            this.render();
+        }
         this.say('點選任一' + (this.humanSide === 'red' ? '紅' : '黑') + '棋開始。');
         this.maybeAiMove();
+    }
+
+    /* 🎲 擲骰 / 擲硬幣:大的(硬幣正面 = 你)執紅先走。載不進 dice-toss.js 就退回上一局的執方,棋照下。 */
+    async pickSide() {
+        const PK = window.PetKit;
+        const kind = this.petKind();
+        const a = PK && kind ? PK.ANIMALS[kind] : null;   // 照難度拿「這一局要坐的那隻」,不是上一局的
+        const foe = a ? `${a.emoji} ${a.name}` : '電腦';
+        try {
+            const { tossForOrder } = await loadDice();
+            const r = await tossForOrder({
+                players: ['你', foe],
+                mode: this.sideChoice,
+                rng: this.diceRng || undefined,   // 測試鉤子:冒煙指定點數(動物每幀都在用 Math.random,換掉它會被搶走)
+                title: this.sideChoice === 'coin' ? '🪙 擲硬幣決定誰先走' : '🎲 擲骰決定誰先走',
+                firstText: (name) => `${name} 先!執 🔴 紅方`,
+            });
+            return r.first === 0 ? 'red' : 'black';
+        } catch (err) {
+            console.error('[dice] toss failed:', err);
+            return this.humanSide;
+        }
     }
 
     /* 📅 每日殘局:每天一組 5 題,全世界同一組、同一順序。 */
@@ -360,6 +415,7 @@ class ArenaApp {
         let idx = Number.isInteger(index) ? index : set.puzzles.findIndex((p) => !solved[p.id]);
         if (idx < 0 || idx >= set.puzzles.length) idx = 0;
 
+        this.newToken();   // 🎲 前一局還在擲 / 電腦還在想 ⇒ 作廢
         this.daily = { key, index: idx, set, puzzle: set.puzzles[idx] };
         this.dailySaved = false;
         this.humanMoves = 0;
@@ -387,7 +443,7 @@ class ArenaApp {
 
     /* ═══ 互動 ═══ */
     handleSquareClick(row, col) {
-        if (this.gameLogic.isGameOver || this.aiThinking) return;
+        if (this.gameLogic.isGameOver || this.aiThinking || this.tossing) return;
         if (this.gameLogic.currentPlayer !== this.playerSide()) return;   // 不是你的回合
 
         const action = this.gameLogic.handleInteraction(row, col);
@@ -414,7 +470,10 @@ class ArenaApp {
         this.gameLogic.executeMove(fromRow, fromCol, toRow, toCol);
         if (byHuman && this.daily) this.humanMoves += 1;
         this.hint = null;                       // 局面變了,舊建議作廢
+        const token = this.gameToken;
         this.renderer.movePiece(fromRow, fromCol, toRow, toCol, () => {
+            /* 🎲 動畫播完時局已經換了(新局 / 讀檔 / 殘局)⇒ 這個回呼屬於上一局,別拿它去叫電腦 */
+            if (token !== this.gameToken) return;
             this.renderer.updateBoardState(this.gameLogic.getBoardState());
             this.render();
             if (byHuman) this._petAfterPlayerMove(toRow, toCol, !!victim); else this._petAfterAiMove(toRow, toCol, !!victim);
@@ -430,12 +489,19 @@ class ArenaApp {
     maybeAiMove() {
         if (this.gameLogic.isGameOver) return;
         if (this.gameLogic.currentPlayer !== this.aiSide()) return;
+        if (this.aiThinking) return;   // 已經排了一手(悔棋 + 落子動畫回呼都會叫進來)⇒ 不要排第二手
 
+        const token = this.gameToken;
         this.aiThinking = true;
         this.render();
         if (this.opponent) this.opponent.think();   // 🐾 手托腮、頭歪、看著盤面(每三手唸一次「讓我想想」)
         // 讓瀏覽器先把「AI 思考中」畫出來,再進同步搜尋
         setTimeout(() => {
+            /* 🎲 局號守門:你執黑時電腦一開局就在想,這 60ms 內按「新局」⇒ 這手屬於上一局,丟掉
+               (不擋的話它會在新局替紅方走一手)。aiThinking 已由新局歸零,不用收。 */
+            if (token !== this.gameToken) return;
+            /* 排下去到現在,輪到誰可能變了(悔棋在動畫空檔裡)⇒ 再確認一次;不然會拿電腦的子在你的回合走 */
+            if (this.gameLogic.isGameOver || this.gameLogic.currentPlayer !== this.aiSide()) { this.aiThinking = false; this.render(); return; }
             let move = null;
 
             /* ① 先看開局譜。
@@ -495,7 +561,7 @@ class ArenaApp {
        ③ 文案三態不可混講:有建議 / 沒有合法著法 / 算的時候出事。 */
     showHint() {
         if (this.gameLogic.isGameOver) { this.say('💡 這一局已經結束了。'); return; }
-        if (this.aiThinking) return;
+        if (this.aiThinking || this.tossing) return;
         if (this.gameLogic.currentPlayer !== this.playerSide()) return;
 
         const key = this.gameLogic.positionKey();
@@ -552,7 +618,7 @@ class ArenaApp {
 
     /* ═══ 悔棋 ═══ */
     undo() {
-        if (this.aiThinking) return;
+        if (this.aiThinking || this.tossing) return;
         /* 退兩個半回合(你的 + AI 回的),讓你重下自己那一手;
            若只剩一步(例如 AI 先手才走了一手)就退一步。 */
         const want = this.gameLogic.history.length >= 2 ? 2 : 1;
@@ -567,6 +633,8 @@ class ArenaApp {
         this.hideOverlay();
         this.render();
         this.say(`已返回 ${done} 步,連按可繼續往前回到更早的局面。`);
+        /* 🎲 你執黑、悔到開局(只退得了電腦那一手)⇒ 輪到電腦卻沒人叫它,整盤卡住 */
+        this.maybeAiMove();
     }
 
     /* ═══ 存讀檔 ═══ */
@@ -593,6 +661,7 @@ class ArenaApp {
             return;
         }
         const data = result.data;
+        this.newToken();   // 🎲 前一局還在擲 / 電腦還在想 ⇒ 作廢
         this.daily = null;                     // 讀檔一律離開每日模式
         this.dailySaved = false;
         this.humanMoves = 0;
@@ -608,7 +677,7 @@ class ArenaApp {
         if (s.viewMode === '2d' || s.viewMode === '3d') this.viewMode = s.viewMode;
         this.el.difficultySelect.value = this.difficulty;
         this.el.openingSelect.value = this.openingBook;
-        this.el.sideSelect.value = this.humanSide;
+        this.el.sideSelect.value = this.sideChoice;   // 選單留著「擲骰」;這一局真的執哪色看存檔
         this.el.viewSelect.value = this.viewMode;
 
         this.bootScene();
@@ -860,8 +929,8 @@ class ArenaApp {
             : (OPENING_BOOKS[this.openingBook] ? OPENING_BOOKS[this.openingBook].hint : '');
 
         el.saveButton.disabled = inDaily;
-        el.undoButton.disabled = !this.gameLogic.canUndo() || this.aiThinking;
-        el.hintButton.disabled = this.aiThinking
+        el.undoButton.disabled = !this.gameLogic.canUndo() || this.aiThinking || this.tossing;
+        el.hintButton.disabled = this.aiThinking || this.tossing
             || this.gameLogic.isGameOver
             || this.gameLogic.currentPlayer !== this.playerSide();
         // ⛶ 全螢幕工具列跟側欄同步(它們只是轉呼叫側欄的鈕)
